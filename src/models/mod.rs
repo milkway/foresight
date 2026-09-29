@@ -8,12 +8,14 @@
 //! | [`HoltWinters`] | yes | 3 cycles, positive values |
 //! | [`LogLinear`] | optional | 3 cycles, positive values |
 //! | [`Arima`], [`AutoArima`] | optional | enough observations after differencing |
+//! | [`Ets`], [`AutoEts`] | optional | 2 cycles when seasonal; positive values for multiplicative parts |
 //! | [`Prophet`] | optional | 4 observations |
 //!
 //! Any model can run on the log or another Box-Cox scale through
 //! [`Transformed`].
 
 mod arima;
+mod ets;
 mod holt_winters;
 mod log_linear;
 mod naive;
@@ -21,6 +23,7 @@ mod prophet;
 mod theta;
 
 pub use arima::{Arima, ArimaFit, AutoArima, Criterion};
+pub use ets::{AutoEts, ErrorKind, Ets, EtsFit, Season, Trend};
 pub use holt_winters::HoltWinters;
 pub use log_linear::LogLinear;
 pub use naive::{Drift, Mean, Naive, SeasonalNaive};
@@ -48,11 +51,13 @@ pub fn defaults() -> Vec<Candidate> {
     ]
 }
 
-/// [`defaults`] plus ARIMA with automatic orders, on the original and on the
-/// log scale. The orders are chosen again at every origin of the backtest,
-/// which takes seconds rather than milliseconds.
+/// [`defaults`] plus exponential smoothing chosen automatically and ARIMA
+/// with automatic orders, on the original and on the log scale. The choices
+/// are made again at every origin of the backtest, which takes seconds rather
+/// than milliseconds.
 pub fn thorough() -> Vec<Candidate> {
     let mut c = defaults();
+    c.push(Candidate::new(AutoEts::new()));
     c.push(Candidate::new(AutoArima::new()));
     c.push(Candidate::new(Transformed::log(AutoArima::new())));
     c

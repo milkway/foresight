@@ -39,7 +39,8 @@ let semestre = melhor.cumulative(6).unwrap();
 
 - Modelos: média, ingênuo, tendência, sazonal ingênuo, Theta, Holt-Winters,
   regressão log-linear (com deflator opcional), ARIMA sazonal por máxima
-  verossimilhança exata, ARIMA com ordens automáticas e Prophet (tendência com
+  verossimilhança exata, ARIMA com ordens automáticas, a família ETS de
+  suavização exponencial com escolha automática e Prophet (tendência com
   pontos de quebra, sazonalidade de Fourier, eventos datados e degraus), sem Stan.
 - Qualquer modelo na escala log ou Box-Cox (`Transformed`).
 - Backtest por origem móvel em todos os núcleos, com MAPE, MAE, RMSE, MASE e

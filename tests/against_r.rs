@@ -512,3 +512,100 @@ fn prophet_matches_r() {
         close(&format!("prophet {name}"), &forecast, reference, 5e-3);
     }
 }
+
+// ---------------------------------------------------------------- ETS
+
+/// `ets(y, model, damped)`: series, model, log-likelihood and AICc; see
+/// `tests/r/reference_ets.R`.
+const ETS: [(&str, &str, f64, f64); 24] = [
+    ("air", "ANN", -863.893377599, 1733.95818377),
+    ("air", "AAN", -863.647302495, 1737.7293876),
+    ("air", "AAdN", -863.796068067, 1740.20527482),
+    ("air", "AAA", -765.935847512, 1570.72883788),
+    ("air", "MAM", -682.403619058, 1403.66438097),
+    ("air", "MAdM", -679.583216237, 1400.63843247),
+    ("air", "MNM", -715.657196898, 1465.0643938),
+    ("air", "MNA", -775.396153368, 1584.54230674),
+    ("icms", "ANN", -2246.04992001, 4498.32206225),
+    ("icms", "AAN", -2245.95553203, 4502.4771018),
+    ("icms", "AAdN", -2245.02595847, 4502.85191695),
+    ("icms", "AAA", -2211.70111867, 4463.91287563),
+    ("icms", "MAM", -2229.11315395, 4498.7369462),
+    ("icms", "MAdM", -2224.98062858, 4493.31609586),
+    ("icms", "MNM", -2231.77342806, 4498.54685612),
+    ("icms", "MNA", -2231.4187523, 4497.8375046),
+    ("fpe", "ANN", -2335.69328148, 4677.60878518),
+    ("fpe", "AAN", -2333.22397189, 4677.01398151),
+    ("fpe", "AAdN", -2334.54709054, 4681.89418108),
+    ("fpe", "AAA", -2227.54957112, 4495.60978053),
+    ("fpe", "MAM", -2205.55417425, 4451.6189868),
+    ("fpe", "MAdM", -2207.13093611, 4457.61671093),
+    ("fpe", "MNM", -2219.48334587, 4473.96669174),
+    ("fpe", "MNA", -2245.25864152, 4525.51728304),
+];
+
+fn ets_series(name: &str) -> Vec<f64> {
+    match name {
+        "air" => air_passengers(),
+        "icms" => column(0),
+        _ => column(1),
+    }
+}
+
+/// R searches parameters and initial states together with a simplex method
+/// that often stops short of the maximum, so its likelihood is a floor, not a
+/// target: ours is never lower, and equal where R does get there.
+#[test]
+fn ets_likelihood_is_never_below_r() {
+    use foresight::models::Ets;
+    let mut equal = 0;
+    for (name, code, log_likelihood, aicc) in ETS {
+        let values = ets_series(name);
+        let fit = Ets::from_code(code)
+            .unwrap()
+            .estimate(Series::new(&values, 12))
+            .unwrap();
+        assert!(
+            fit.log_likelihood > log_likelihood - 1e-3,
+            "{name} {code}: {} × {log_likelihood}",
+            fit.log_likelihood
+        );
+        // the same likelihood gives the same criterion: the parameters are
+        // counted alike
+        if (fit.log_likelihood - log_likelihood).abs() < 5e-3 {
+            assert!((fit.aicc - aicc).abs() < 1e-2, "{name} {code}");
+            equal += 1;
+        }
+    }
+    assert!(equal >= 2, "{equal}");
+}
+
+/// Simple exponential smoothing, where both reach the maximum.
+#[test]
+fn simple_exponential_smoothing_matches_r() {
+    use foresight::models::Ets;
+    for (name, reference) in [
+        ("air", 431.995792636_f64),
+        ("icms", 762311852.346_f64),
+        ("fpe", 848669474.797_f64),
+    ] {
+        let values = ets_series(name);
+        let forecast = Ets::from_code("ANN")
+            .unwrap()
+            .forecast(Series::new(&values, 12), 12)
+            .unwrap();
+        close(&format!("ets {name}"), &forecast, &[reference; 12], 1e-3);
+    }
+}
+
+/// `ets(y)`: the same model on ICMS and FPE. On the airline passengers R
+/// settles for ETS(M,Ad,M) because its search stops short on ETS(M,A,M).
+#[test]
+fn automatic_ets_matches_r() {
+    use foresight::models::AutoEts;
+    for (name, code) in [("icms", "AAA"), ("fpe", "MAM")] {
+        let values = ets_series(name);
+        let fit = AutoEts::new().select(Series::new(&values, 12)).unwrap();
+        assert_eq!(fit.model().code(), code, "{name}");
+    }
+}

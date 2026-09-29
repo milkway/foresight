@@ -1,6 +1,6 @@
 [package]
 name = "foresight"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["André Leite <leite@castlab.org>"]
 edition = "2021"
 description = "Time series forecasting with out-of-sample model selection, empirical prediction intervals and no dependencies"
