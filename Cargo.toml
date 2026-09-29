@@ -1,0 +1,20 @@
+[package]
+name = "foresight"
+version = "0.1.0"
+authors = ["André Leite <leite@castlab.org>"]
+edition = "2021"
+description = "Time series forecasting with out-of-sample model selection, empirical prediction intervals and no dependencies"
+license = "MIT"
+repository = "https://github.com/milkway/foresight"
+homepage = "https://milkway.github.io/foresight/"
+documentation = "https://milkway.github.io/foresight/api/foresight/"
+readme = "README.md"
+keywords = ["forecasting", "time-series", "arima", "backtest", "statistics"]
+categories = ["science", "mathematics"]
+exclude = ["site/", ".github/", "scripts/", "tests/r/", "CLAUDE.md"]
+
+[dependencies]
+
+# The models are numerical: without optimisation the tests take minutes.
+[profile.dev]
+opt-level = 3
