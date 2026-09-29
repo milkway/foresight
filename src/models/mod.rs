@@ -10,6 +10,8 @@
 //! | [`Arima`], [`AutoArima`] | optional | enough observations after differencing |
 //! | [`Ets`], [`AutoEts`] | optional | 2 cycles when seasonal; positive values for multiplicative parts |
 //! | [`Prophet`] | optional | 4 observations |
+//! | [`Croston`] | no | values that are not negative |
+//! | [`Ensemble`] | as its members | what its members need |
 //! | [`Tbats`] | optional, several periods, not necessarily whole | 8 observations |
 //!
 //! Any model can run on the log or another Box-Cox scale through
@@ -17,7 +19,9 @@
 //! [`Decomposed`].
 
 mod arima;
+mod croston;
 mod decomposed;
+mod ensemble;
 mod ets;
 mod holt_winters;
 mod log_linear;
@@ -27,7 +31,9 @@ mod tbats;
 mod theta;
 
 pub use arima::{Arima, ArimaFit, ArimaX, AutoArima, Criterion};
+pub use croston::{Croston, Intermittent};
 pub use decomposed::Decomposed;
+pub use ensemble::{Ensemble, Weighting};
 pub use ets::{AutoEts, ErrorKind, Ets, EtsFit, Season, Trend};
 pub use holt_winters::HoltWinters;
 pub use log_linear::LogLinear;
@@ -63,6 +69,12 @@ pub fn defaults() -> Vec<Candidate> {
 /// than milliseconds.
 pub fn thorough() -> Vec<Candidate> {
     let mut c = defaults();
+    c.push(Candidate::new(
+        Ensemble::new(defaults()).weighting(Weighting::InverseError),
+    ));
+    c.push(Candidate::new(
+        Ensemble::new(defaults()).weighting(Weighting::Stacked),
+    ));
     c.push(Candidate::new(AutoEts::new()));
     c.push(Candidate::new(Decomposed::new(AutoEts::new())));
     c.push(Candidate::new(Transformed::log(Decomposed::new(

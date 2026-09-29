@@ -66,6 +66,18 @@ println!("{:?}", fit.regression);
 let next_year = fit.forecast(12);
 ```
 
+An ensemble, which can sit in a backtest next to its own members:
+
+```rust
+use foresight::models::{self, Ensemble, Weighting};
+use foresight::{Backtest, Candidate, Series};
+
+let ensemble = Ensemble::new(models::defaults()).weighting(Weighting::InverseError);
+let mut candidates = models::defaults();
+candidates.push(Candidate::new(ensemble));
+let report = Backtest::default().run(Series::monthly(&values, 0), &candidates).unwrap();
+```
+
 Several seasonal patterns at once:
 
 ```rust
@@ -111,6 +123,9 @@ println!("ARIMA{:?}{:?}, AICc {:.1}", fit.order(), fit.seasonal_order(), fit.aic
 | `decompose` | `Stl` (seasonal-trend decomposition by LOESS, optionally robust) and `Mstl` (several seasonal periods), with strength of trend and of each seasonal pattern |
 | `Decomposed` | any model on the seasonally adjusted series, the seasonal patterns added back to its forecasts |
 | `Regressors` | external variables aligned with the data, Fourier terms for smooth or long seasonal patterns, seasonal dummies; `Arima::with_regressors` and `AutoArima::regressors` fit a regression with ARIMA errors |
+| `Ensemble` | a model made of other models: plain average, median, weights by inverse error, or stacked weights (none negative, adding up to one) learnt on the end of the history |
+| `Croston` | intermittent demand: Croston, the Syntetos-Boylan correction and Teunter-Syntetos-Babai |
+| `clean` | gaps filled with the season they fall in, outliers found and replaced |
 | `Transformed`, `BoxCox` | any model on the log or another Box-Cox scale; λ by Guerrero's method |
 | `Backtest` | rolling origin (expanding or fixed window) on all cores; MAPE, MAE, RMSE, MASE and bias by horizon; average of the best models; choice by out-of-sample error |
 | intervals | empirical quantiles of the backtest errors, by horizon and for cumulative totals |
@@ -145,6 +160,8 @@ packages `forecast` 9.0.2 and `prophet` 1.1.7 on public data
 | STL, MSTL (one and two seasonal periods), forecasts by decomposition | exact (10 digits) |
 | ETS, 8 models × 3 series | likelihood equal to R's where R reaches the maximum, higher in the other cases |
 | Automatic ETS | same model on 2 of 3 series |
+| Croston | exact |
+| Outliers | the ones put on purpose are found by both; the doubtful points flagged differ (R smooths with Friedman's super smoother, we with the trend of a robust STL) |
 | TBATS, 2 structures × 3 series | likelihood better than R's in all 6 |
 | Automatic TBATS | AIC lower than R's on the 3 series |
 | Automatic ARIMA orders | same model on 2 of 3 series; on the third the two stepwise searches end within one unit of AICc |
@@ -193,7 +210,11 @@ all horizons:
 
 ## Status
 
-Early: the API may change before 1.0. Planned: intermittent demand (Croston) and outlier cleaning.
+Early: the API may change before 1.0. Planned: prediction intervals from
+simulation, hierarchical reconciliation and bindings for Python and R.
+
+Not planned: neural networks and foundation models, which need heavy
+dependencies and trained weights.
 
 ## Development
 

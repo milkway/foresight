@@ -79,7 +79,11 @@ pub struct Backtest {
 }
 
 /// `f(0), …, f(n − 1)`, computed on all cores when `parallel`.
-fn map_indices<T: Send>(n: usize, parallel: bool, f: impl Fn(usize) -> T + Sync) -> Vec<T> {
+pub(crate) fn map_indices<T: Send>(
+    n: usize,
+    parallel: bool,
+    f: impl Fn(usize) -> T + Sync,
+) -> Vec<T> {
     let threads = if parallel && cfg!(not(target_family = "wasm")) {
         std::thread::available_parallelism().map_or(1, |t| t.get().min(n))
     } else {

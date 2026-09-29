@@ -1038,3 +1038,60 @@ fn automatic_tbats_is_no_worse_than_r() {
         assert!(fit.aic() < aic, "{name}: {} × {aic}", fit.aic());
     }
 }
+
+// ---------------------------------------------------------------- intermittent demand, outliers
+
+/// `croston(y, alpha = )`; see `tests/r/reference_croston.R`.
+#[test]
+fn croston_matches_r() {
+    use foresight::models::Croston;
+    let demand: Vec<f64> = (0..60usize)
+        .map(|t| {
+            if (t * 7) % 10 < 3 {
+                (1 + (t * 3) % 5) as f64
+            } else {
+                0.0
+            }
+        })
+        .collect();
+    for (alpha, reference) in [(0.1, 1.05719048024), (0.3, 1.13239769816)] {
+        let forecast = Croston::new()
+            .alpha(alpha)
+            .forecast(Series::non_seasonal(&demand), 1)
+            .unwrap();
+        exactly("croston", &forecast, &[reference]);
+    }
+}
+
+/// `tsoutliers()` smooths with Friedman's super smoother and we with the
+/// trend of a robust STL, so the two do not flag the same doubtful points.
+/// The outliers put into the series on purpose are found by both.
+#[test]
+fn outliers_put_on_purpose_are_found_as_in_r() {
+    use foresight::clean::outliers;
+    let mut air: Vec<f64> = air_passengers().iter().map(|x| x.ln()).collect();
+    air[29] += 0.8;
+    air[99] -= 0.7;
+    let mut icms = column(0);
+    icms[39] *= 2.0;
+    icms[89] *= 0.4;
+    // positions from 1, as R counts, with its replacements
+    let cases = [
+        (air, [(30, 5.24141186382), (100, 5.85256065452)]),
+        (icms, [(40, 307037221.601), (90, 669398805.579)]),
+    ];
+    for (values, expected) in cases {
+        let found = outliers(&values, 12).unwrap();
+        for (position, replacement) in expected {
+            let o = found
+                .iter()
+                .find(|o| o.index + 1 == position)
+                .unwrap_or_else(|| panic!("{position} not found"));
+            assert!(
+                (o.replacement / replacement - 1.0).abs() < 0.1,
+                "{position}"
+            );
+        }
+        assert!(found.len() <= 5);
+    }
+}

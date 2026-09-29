@@ -39,6 +39,7 @@
 
 pub mod accuracy;
 pub mod backtest;
+pub mod clean;
 pub mod decompose;
 pub mod diagnostics;
 mod linalg;

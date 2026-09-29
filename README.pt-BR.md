@@ -47,6 +47,10 @@ let semestre = melhor.cumulative(6).unwrap();
   (`Decomposed`).
 - Regressores: regressão com erros ARIMA, termos de Fourier e indicadores
   sazonais (`Regressors`).
+- Ensemble: média, mediana, pesos pelo inverso do erro ou pesos empilhados,
+  aprendidos no fim do histórico (`Ensemble`).
+- Demanda intermitente (`Croston`) e limpeza de dados: falhas e atípicos
+  (`clean`).
 - Qualquer modelo na escala log ou Box-Cox (`Transformed`).
 - Backtest por origem móvel em todos os núcleos, com MAPE, MAE, RMSE, MASE e
   viés por horizonte, média dos melhores modelos e escolha pelo erro fora da
