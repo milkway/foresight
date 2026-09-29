@@ -198,7 +198,7 @@ all horizons:
 | Series | Best candidate | MAPE | Seasonal naive |
 |---|---|---|---|
 | ICMS (state sales tax) | average of airline ARIMA on the log and original scales | 3.4% | 11.5% |
-| FPE (federal transfers) | automatic ARIMA on the log scale | 4.9% | 9.5% |
+| FPE (federal transfers) | average of automatic ARIMA on the log scale and the ensemble weighted by inverse error | 4.8% | 9.5% |
 
 ## Data
 
@@ -210,10 +210,9 @@ all horizons:
 
 ## Status
 
-Early: the API may change before 1.0. Planned: prediction intervals from
-simulation, hierarchical reconciliation and bindings for Python and R.
+Early: the API may change before 1.0.
 
-Not planned: neural networks and foundation models, which need heavy
+Out of scope: neural networks and foundation models, which need heavy
 dependencies and trained weights.
 
 ## Development
