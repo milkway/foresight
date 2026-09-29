@@ -54,6 +54,19 @@ let fit = model.fit(Series::monthly(&values, 0)).unwrap();
 let next_year = fit.forecast(12);
 ```
 
+A trend that bends, with dated events:
+
+```rust
+use foresight::{models::Prophet, Fitted, Series};
+
+let model = Prophet::new()
+    .event("campaign", &[10, 34, 58, 82, 106, 130]) // positions, future ones included
+    .step("new_law", 80);                            // a lasting change of level
+let fit = model.estimate(Series::monthly(&values, 0)).unwrap();
+println!("{:?} {:?}", fit.changepoints(), fit.effects());
+let next_year = fit.forecast(12);
+```
+
 Automatic orders, inspected:
 
 ```rust
@@ -69,7 +82,7 @@ println!("ARIMA{:?}{:?}, AICc {:.1}", fit.order(), fit.seasonal_order(), fit.aic
 |---|---|
 | `Series` | values + seasonal period; slices keep season and position |
 | `Model` / `Fitted` | fit once, forecast any horizon, inspect parameters |
-| `models` | `Mean`, `Naive`, `Drift`, `SeasonalNaive`, `Theta`, `HoltWinters`, `LogLinear` (optionally deflated by a price index), `Arima` (seasonal, exact maximum likelihood), `AutoArima` (differences by tests, orders by stepwise search) |
+| `models` | `Mean`, `Naive`, `Drift`, `SeasonalNaive`, `Theta`, `HoltWinters`, `LogLinear` (optionally deflated by a price index), `Arima` (seasonal, exact maximum likelihood), `AutoArima` (differences by tests, orders by stepwise search), `Prophet` (trend with changepoints, Fourier seasonality, dated events and steps) |
 | `Transformed`, `BoxCox` | any model on the log or another Box-Cox scale; λ by Guerrero's method |
 | `Backtest` | rolling origin (expanding or fixed window) on all cores; MAPE, MAE, RMSE, MASE and bias by horizon; average of the best models; choice by out-of-sample error |
 | intervals | empirical quantiles of the backtest errors, by horizon and for cumulative totals |
@@ -88,8 +101,9 @@ overstates its uncertainty.
 ## Checked against R
 
 Methods are implemented from the published papers and compared with the R
-package `forecast` 9.0.2 on public data (`tests/against_r.rs`; the reference
-values come from `tests/r/reference.R`).
+packages `forecast` 9.0.2 and `prophet` 1.1.7 on public data
+(`tests/against_r.rs`; the reference values come from the scripts in
+`tests/r/`).
 
 | Method | Agreement |
 |---|---|
@@ -98,10 +112,18 @@ values come from `tests/r/reference.R`).
 | ARIMA by maximum likelihood | coefficients within 0.002, forecasts within 0.01% |
 | Number of differences (KPSS), seasonal differences | same decisions |
 | Box-Cox λ (Guerrero) | within 0.001 |
+| Prophet (linear growth, additive seasonality) | forecasts within 0.5% |
 | Automatic ARIMA orders | same model on 2 of 3 series; on the third the two stepwise searches end within one unit of AICc |
 
 Theta and ARIMA differ from R only by the optimiser: the estimates are the
-same optimum found by different routes.
+same optimum found by different routes. Prophet is fitted here without Stan:
+for a given noise level its posterior is a lasso with ridge terms, solved
+exactly by an active-set method, so the changepoints that do not matter come
+out as exactly zero.
+
+The Prophet here covers equally spaced series, linear growth and additive
+components (fit on the log scale for multiplicative behaviour); events are
+given by position rather than by calendar.
 
 ## Example: public revenue of a Brazilian state
 
@@ -127,9 +149,9 @@ all horizons:
 
 ## Status
 
-Early: the API may change before 1.0. Planned: regressors (regression with
-ARIMA errors, Fourier terms), the full exponential smoothing family, trend
-changepoints with dated events, outlier cleaning and STL.
+Early: the API may change before 1.0. Planned: the full exponential smoothing
+family, STL and multiple seasonality, regressors (regression with ARIMA
+errors), TBATS, intermittent demand (Croston) and outlier cleaning.
 
 ## Development
 

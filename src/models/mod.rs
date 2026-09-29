@@ -8,6 +8,7 @@
 //! | [`HoltWinters`] | yes | 3 cycles, positive values |
 //! | [`LogLinear`] | optional | 3 cycles, positive values |
 //! | [`Arima`], [`AutoArima`] | optional | enough observations after differencing |
+//! | [`Prophet`] | optional | 4 observations |
 //!
 //! Any model can run on the log or another Box-Cox scale through
 //! [`Transformed`].
@@ -16,12 +17,14 @@ mod arima;
 mod holt_winters;
 mod log_linear;
 mod naive;
+mod prophet;
 mod theta;
 
 pub use arima::{Arima, ArimaFit, AutoArima, Criterion};
 pub use holt_winters::HoltWinters;
 pub use log_linear::LogLinear;
 pub use naive::{Drift, Mean, Naive, SeasonalNaive};
+pub use prophet::{Prophet, ProphetFit};
 pub use theta::Theta;
 
 use crate::backtest::Candidate;
@@ -40,6 +43,8 @@ pub fn defaults() -> Vec<Candidate> {
         Candidate::new(LogLinear::new()),
         Candidate::new(Arima::airline()),
         Candidate::new(Transformed::log(Arima::airline())),
+        Candidate::new(Prophet::new()),
+        Candidate::new(Transformed::log(Prophet::new())),
     ]
 }
 

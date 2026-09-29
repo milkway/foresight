@@ -1,5 +1,5 @@
-//! Forecasts compared with the R package `forecast` 9.0.2 on public data.
-//! The reference values come from `tests/r/reference.R`.
+//! Forecasts compared with the R packages `forecast` 9.0.2 and `prophet` 1.1.7
+//! on public data. The reference values come from the scripts in `tests/r/`.
 
 use foresight::models::{Drift, SeasonalNaive, Theta};
 use foresight::{Model, Series};
@@ -393,5 +393,122 @@ fn automatic_orders_match_r() {
             .unwrap();
         assert_eq!(fit.order(), order, "{name}");
         assert_eq!(fit.seasonal_order(), seasonal, "{name}");
+    }
+}
+
+// ---------------------------------------------------------------- Prophet
+
+/// `prophet` 1.1.7 with its default priors, 25 changepoints and a seasonal
+/// pattern of period 12 and 5 harmonics (0 for the last case); see
+/// `tests/r/reference_prophet.R`.
+const PROPHET: [(&str, [f64; 12]); 5] = [
+    (
+        "air",
+        [
+            465.159342120,
+            457.700024268,
+            494.497714684,
+            490.689199594,
+            497.069043822,
+            536.158398487,
+            577.436885865,
+            576.439204633,
+            529.375636835,
+            492.773831354,
+            460.610964699,
+            488.831699906,
+        ],
+    ),
+    (
+        "airlog",
+        [
+            6.12936633602,
+            6.11052001620,
+            6.25623281675,
+            6.22828613082,
+            6.24183384877,
+            6.36743747478,
+            6.48711484227,
+            6.48070409913,
+            6.35141161822,
+            6.21622225669,
+            6.08751465413,
+            6.20430269438,
+        ],
+    ),
+    (
+        "icms",
+        [
+            799991648.283,
+            801449164.061,
+            814319484.717,
+            822632193.810,
+            834703548.778,
+            848279450.041,
+            860422337.330,
+            788887340.768,
+            771602741.356,
+            813459106.402,
+            803839761.526,
+            847079142.629,
+        ],
+    ),
+    (
+        "fpelog",
+        [
+            20.3150460091,
+            20.3906146702,
+            20.3018838256,
+            20.2848513429,
+            20.6304825552,
+            20.6502040028,
+            20.7049261944,
+            20.8688811773,
+            20.5207288971,
+            20.5000313753,
+            20.7582784957,
+            20.5883568188,
+        ],
+    ),
+    (
+        "airflat",
+        [
+            480.471108596,
+            483.335113735,
+            486.199118873,
+            489.063124012,
+            491.927129151,
+            494.791134290,
+            497.655139429,
+            500.519144568,
+            503.383149706,
+            506.247154845,
+            509.111159984,
+            511.975165123,
+        ],
+    ),
+];
+
+/// Prophet finds its estimate with a general optimiser on a function that has
+/// kinks; we solve the same problem exactly. The forecasts differ by the
+/// precision of that optimiser.
+#[test]
+fn prophet_matches_r() {
+    use foresight::models::Prophet;
+    let air = air_passengers();
+    let log = |v: &[f64]| -> Vec<f64> { v.iter().map(|x| x.ln()).collect() };
+    for (name, reference) in &PROPHET {
+        let (values, order) = match *name {
+            "air" => (air.clone(), 5),
+            "airlog" => (log(&air), 5),
+            "icms" => (column(0), 5),
+            "fpelog" => (log(&column(1)), 5),
+            _ => (air.clone(), 0),
+        };
+        let forecast = Prophet::new()
+            .fourier_order(order)
+            .forecast(Series::new(&values, 12), 12)
+            .unwrap();
+        close(&format!("prophet {name}"), &forecast, reference, 5e-3);
     }
 }

@@ -39,7 +39,8 @@ let semestre = melhor.cumulative(6).unwrap();
 
 - Modelos: média, ingênuo, tendência, sazonal ingênuo, Theta, Holt-Winters,
   regressão log-linear (com deflator opcional), ARIMA sazonal por máxima
-  verossimilhança exata e ARIMA com ordens automáticas.
+  verossimilhança exata, ARIMA com ordens automáticas e Prophet (tendência com
+  pontos de quebra, sazonalidade de Fourier, eventos datados e degraus), sem Stan.
 - Qualquer modelo na escala log ou Box-Cox (`Transformed`).
 - Backtest por origem móvel em todos os núcleos, com MAPE, MAE, RMSE, MASE e
   viés por horizonte, média dos melhores modelos e escolha pelo erro fora da
@@ -47,8 +48,8 @@ let semestre = melhor.cumulative(6).unwrap();
 - Intervalos empíricos por horizonte e para totais acumulados.
 - Diagnósticos: teste KPSS, número de diferenças, força da sazonalidade.
 
-Os métodos foram implementados a partir dos artigos e conferidos com o pacote
-`forecast` do R em dados públicos (`tests/against_r.rs`).
+Os métodos foram implementados a partir dos artigos e conferidos com os pacotes
+`forecast` e `prophet` do R em dados públicos (`tests/against_r.rs`).
 
 ## Licença
 

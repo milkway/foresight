@@ -6,7 +6,7 @@
 <title>foresight — forecasting that picks its model by what would have worked</title>
 <meta name="description" content="A Rust crate for time series forecasting: rolling-origin backtest, model choice by out-of-sample error and empirical prediction intervals. No dependencies, deterministic, checked against R." />
 <meta property="og:title" content="foresight — time series forecasting in Rust" />
-<meta property="og:description" content="Rolling-origin backtest, choice by out-of-sample error, empirical intervals for each horizon and for totals. ARIMA, Theta, Holt-Winters and more, with no dependencies." />
+<meta property="og:description" content="Rolling-origin backtest, choice by out-of-sample error, empirical intervals for each horizon and for totals. ARIMA, Prophet, Theta, Holt-Winters and more, with no dependencies." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://milkway.github.io/foresight/" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AD%3C/text%3E%3C/svg%3E" />
@@ -264,7 +264,7 @@
 <span class="c-kw">let</span> report = <span class="c-ty">Backtest</span>::<span class="c-cmd">default</span>()
     .<span class="c-cmd">run</span>(y, &amp;models::<span class="c-cmd">thorough</span>())?;
 
-<span class="c-cmt">// 36 origins · 12 months ahead · 11 models</span>
+<span class="c-cmt">// 36 origins · 12 months ahead · 13 models</span>
 <span class="c-ok">mean(log_arima+arima)</span>  MAPE <span class="c-ok">3.43%</span>
 log_linear             MAPE 5.54%
 holt_winters           MAPE 7.29%
@@ -291,11 +291,11 @@ seasonal_naive         MAPE 11.45%</code></pre>
   <section id="models">
     <div class="wrap">
       <h2>Models</h2>
-      <p class="sub">From the yardsticks every model must beat to seasonal ARIMA with automatic orders. Any of them can run on the log or another Box-Cox scale.</p>
+      <p class="sub">From the yardsticks every model must beat to seasonal ARIMA with automatic orders and Prophet with dated events. Any of them can run on the log or another Box-Cox scale.</p>
       <div class="pills">
-        <span class="pill">Mean</span><span class="pill">Naive</span><span class="pill">Drift</span><span class="pill">SeasonalNaive</span><span class="pill">Theta</span><span class="pill">HoltWinters</span><span class="pill">LogLinear</span><span class="pill">Arima</span><span class="pill">AutoArima</span><span class="pill">Transformed&lt;M&gt;</span><span class="pill">BoxCox</span>
+        <span class="pill">Mean</span><span class="pill">Naive</span><span class="pill">Drift</span><span class="pill">SeasonalNaive</span><span class="pill">Theta</span><span class="pill">HoltWinters</span><span class="pill">LogLinear</span><span class="pill">Arima</span><span class="pill">AutoArima</span><span class="pill">Prophet</span><span class="pill">Transformed&lt;M&gt;</span><span class="pill">BoxCox</span>
       </div>
-      <p class="note">ARIMA is estimated by exact Gaussian maximum likelihood with the innovations algorithm, searching over partial autocorrelations so the estimates are always stationary and invertible. Automatic orders follow Hyndman &amp; Khandakar (2008): differences by the KPSS test and the strength of seasonality, the rest by stepwise search on AICc. Your own model is one trait away: implement <code>Model</code> and it joins the backtest.</p>
+      <p class="note">ARIMA is estimated by exact Gaussian maximum likelihood with the innovations algorithm, searching over partial autocorrelations so the estimates are always stationary and invertible. Automatic orders follow Hyndman &amp; Khandakar (2008): differences by the KPSS test and the strength of seasonality, the rest by stepwise search on AICc. Prophet is fitted without Stan: for a given noise level its posterior is a lasso with ridge terms, solved exactly, so the changepoints that do not matter come out as exactly zero. Your own model is one trait away: implement <code>Model</code> and it joins the backtest.</p>
     </div>
   </section>
 
@@ -388,7 +388,7 @@ println!(<span class="c-str">"{:?}{:?} AICc {}"</span>,
   <section id="trust">
     <div class="wrap">
       <h2>Checked against R</h2>
-      <p class="sub">Every method is implemented from the published papers and compared with the R package <code>forecast</code> 9.0.2 on public data. The comparison is part of the test suite.</p>
+      <p class="sub">Every method is implemented from the published papers and compared with the R packages <code>forecast</code> 9.0.2 and <code>prophet</code> 1.1.7 on public data. The comparison is part of the test suite.</p>
       <div class="card scroll">
         <table class="cmp">
           <thead><tr><th>Method</th><th>Agreement with R</th></tr></thead>
@@ -398,13 +398,14 @@ println!(<span class="c-str">"{:?}{:?} AICc {}"</span>,
             <tr><td>ARIMA by maximum likelihood</td><td>Coefficients within 0.002, forecasts within 0.01%</td></tr>
             <tr><td>Number of ordinary and seasonal differences</td><td>Same decisions</td></tr>
             <tr><td>Box-Cox λ by Guerrero's method</td><td>Within 0.001</td></tr>
+            <tr><td>Prophet (linear growth, additive seasonality)</td><td>Forecasts within 0.5%</td></tr>
             <tr><td>Automatic ARIMA orders</td><td>Same model on 2 of 3 series; on the third the two searches end within one unit of AICc</td></tr>
           </tbody>
         </table>
       </div>
       <div class="grid f3" style="margin-top:18px">
         <div class="card"><div class="ic">✅</div><h3>CI on every platform</h3><p>fmt · clippy <code>-D warnings</code> · tests and docs on Linux, macOS and Windows, plus a WebAssembly build.</p></div>
-        <div class="card"><div class="ic">📄</div><h3>From the papers</h3><p>Box &amp; Jenkins, Brockwell &amp; Davis, Hyndman &amp; Khandakar, Assimakopoulos &amp; Nikolopoulos, Guerrero, Kwiatkowski et al. R supplies reference numbers only.</p></div>
+        <div class="card"><div class="ic">📄</div><h3>From the papers</h3><p>Box &amp; Jenkins, Brockwell &amp; Davis, Hyndman &amp; Khandakar, Taylor &amp; Letham, Assimakopoulos &amp; Nikolopoulos, Guerrero, Kwiatkowski et al. R supplies reference numbers only.</p></div>
         <div class="card"><div class="ic">⚖️</div><h3>MIT, nothing attached</h3><p>With no dependencies there is no license to reconcile and no supply chain to watch.</p></div>
       </div>
     </div>
