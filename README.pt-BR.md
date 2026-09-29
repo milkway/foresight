@@ -42,6 +42,8 @@ let semestre = melhor.cumulative(6).unwrap();
   verossimilhança exata, ARIMA com ordens automáticas, a família ETS de
   suavização exponencial com escolha automática e Prophet (tendência com
   pontos de quebra, sazonalidade de Fourier, eventos datados e degraus), sem Stan.
+- Decomposição STL e MSTL (várias sazonalidades) e previsão por decomposição
+  (`Decomposed`).
 - Qualquer modelo na escala log ou Box-Cox (`Transformed`).
 - Backtest por origem móvel em todos os núcleos, com MAPE, MAE, RMSE, MASE e
   viés por horizonte, média dos melhores modelos e escolha pelo erro fora da

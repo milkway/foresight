@@ -1,6 +1,9 @@
 //! Forecasts compared with the R packages `forecast` 9.0.2 and `prophet` 1.1.7
 //! on public data. The reference values come from the scripts in `tests/r/`.
 
+// the reference values are pasted as R prints them
+#![allow(clippy::excessive_precision)]
+
 use foresight::models::{Drift, SeasonalNaive, Theta};
 use foresight::{Model, Series};
 
@@ -608,4 +611,273 @@ fn automatic_ets_matches_r() {
         let fit = AutoEts::new().select(Series::new(&values, 12)).unwrap();
         assert_eq!(fit.model().code(), code, "{name}");
     }
+}
+
+// ---------------------------------------------------------------- STL
+
+const PICKED: [usize; 9] = [1, 2, 3, 50, 51, 52, 142, 143, 144];
+
+fn picked(values: &[f64], positions: &[usize]) -> Vec<f64> {
+    positions.iter().map(|i| values[i - 1]).collect()
+}
+
+fn exactly(name: &str, ours: &[f64], reference: &[f64]) {
+    assert_eq!(ours.len(), reference.len());
+    for (a, b) in ours.iter().zip(reference) {
+        assert!(
+            (a - b).abs() < 1e-10 * b.abs().max(1.0),
+            "{name}: {a} × {b}"
+        );
+    }
+}
+
+/// `stl()` on the log of the airline passengers; see
+/// `tests/r/reference_stl.R`. The same algorithm gives the same numbers.
+#[test]
+fn stl_matches_r() {
+    use foresight::decompose::{SeasonalWindow, Stl};
+    let air: Vec<f64> = air_passengers().iter().map(|x| x.ln()).collect();
+    let cases = [
+        (
+            "periodic",
+            Stl::new(12, SeasonalWindow::Periodic),
+            [
+                -0.091640424146522,
+                -0.114028283920271,
+                0.015865851044779,
+                -0.114028283920271,
+                0.015865851044779,
+                -0.014027589973823,
+                -0.070248358783457,
+                -0.213527739592963,
+                -0.100636250654005,
+            ],
+            [
+                4.8293886539529,
+                4.8303681398962,
+                4.8313476258395,
+                5.3817013546060,
+                5.3922411311998,
+                5.3984785236674,
+                6.1875938244424,
+                6.1963074920020,
+                6.2047523564265,
+            ],
+        ),
+        (
+            "span13",
+            Stl::new(12, SeasonalWindow::Span(13)),
+            [
+                -0.0904060780043153,
+                -0.0836637751334351,
+                0.0482334330149413,
+                -0.0974759863024456,
+                0.0394707343252156,
+                -0.0039276791372576,
+                -0.0704283807905346,
+                -0.2151459072716038,
+                -0.1115730324867191,
+            ],
+            [
+                4.8162448382157,
+                4.8199604288353,
+                4.8236760194550,
+                5.3760638278799,
+                5.3855194397741,
+                5.3949750516684,
+                6.1839137015929,
+                6.1919356466679,
+                6.1999575917430,
+            ],
+        ),
+        (
+            "degree1",
+            Stl::new(12, SeasonalWindow::Span(11))
+                .degrees(1, 1, 1)
+                .trend_window(21),
+            [
+                -0.0911574879099253,
+                -0.0215561352295905,
+                0.0841225137629235,
+                -0.0932180134549157,
+                0.0443587852853652,
+                -0.0004079228215351,
+                -0.0616371229335772,
+                -0.2140886482110486,
+                -0.1246185253352176,
+            ],
+            [
+                4.8043772647416,
+                4.8097339370475,
+                4.8150906093534,
+                5.3760442794580,
+                5.3852536389086,
+                5.3944629983592,
+                6.1780595183650,
+                6.1850210484115,
+                6.1919825784580,
+            ],
+        ),
+    ];
+    for (name, stl, seasonal, trend) in cases {
+        let d = stl.decompose(&air).unwrap();
+        exactly(
+            &format!("{name} seasonal"),
+            &picked(&d.seasonal[0], &PICKED),
+            &seasonal,
+        );
+        exactly(&format!("{name} trend"), &picked(&d.trend, &PICKED), &trend);
+    }
+    // robust, 5 rounds of one pass: first and last seasonal values
+    let d = Stl::new(12, SeasonalWindow::Span(7))
+        .robust(true)
+        .iterations(1, 5)
+        .decompose(&air)
+        .unwrap();
+    exactly(
+        "robust",
+        &[d.seasonal[0][0], d.seasonal[0][143]],
+        &[-0.0708530269055, -0.1165670131205],
+    );
+}
+
+/// `mstl()` of the package forecast, with one and with two seasonal periods.
+#[test]
+fn mstl_matches_r() {
+    use foresight::decompose::Mstl;
+    let air: Vec<f64> = air_passengers().iter().map(|x| x.ln()).collect();
+    let d = Mstl::new(&[12]).decompose(&air).unwrap();
+    exactly(
+        "mstl seasonal",
+        &picked(&d.seasonal[0], &PICKED),
+        &[
+            -0.0906711738360057,
+            -0.0787778402369833,
+            0.0518556568069013,
+            -0.0956238190693830,
+            0.0422890316389607,
+            -0.0020400905349825,
+            -0.0699806937282843,
+            -0.2152399450163227,
+            -0.1127019025044743,
+        ],
+    );
+    exactly(
+        "mstl trend",
+        &picked(&d.trend, &PICKED),
+        &[
+            4.8154594385253,
+            4.8192879728100,
+            4.8231165070947,
+            5.3759590706955,
+            5.3853869671768,
+            5.3948148636581,
+            6.1831917970209,
+            6.1910721898301,
+            6.1989525826393,
+        ],
+    );
+
+    let weekly = [5.0, 0.0, -2.0, -3.0, 0.0, 1.0, -1.0];
+    let two: Vec<f64> = (0..420)
+        .map(|t| {
+            let x = t as f64;
+            100.0
+                + 0.05 * x
+                + weekly[t % 7]
+                + 8.0 * (2.0 * std::f64::consts::PI * x / 30.0).sin()
+                + 2.0 * (x * 1.7).sin() * (x * 0.3).cos()
+        })
+        .collect();
+    let d = Mstl::new(&[7, 30]).decompose(&two).unwrap();
+    let positions = [1, 2, 3, 200, 201, 202, 418, 419, 420];
+    exactly(
+        "two seasonal 7",
+        &picked(&d.seasonal[0], &positions),
+        &[
+            5.033962062787970,
+            0.035176510741036,
+            -2.129322803268722,
+            -3.086314754228369,
+            0.069767979458528,
+            1.032998673942375,
+            -0.124792166606373,
+            0.938282183929101,
+            -0.898954997659186,
+        ],
+    );
+    exactly(
+        "two seasonal 30",
+        &picked(&d.seasonal[1], &positions),
+        &[
+            -0.090911163758398,
+            1.743338626385907,
+            3.241352290708424,
+            -5.955326834161487,
+            -6.918130532421581,
+            -7.605873830646563,
+            -4.733437975352143,
+            -3.132438409506112,
+            -1.598225429194311,
+        ],
+    );
+    exactly(
+        "two trend",
+        &picked(&d.trend, &positions),
+        &[
+            100.12665833943,
+            100.17046946140,
+            100.21428058337,
+            109.95009753047,
+            110.00013113773,
+            110.05016474498,
+            120.97907207921,
+            121.03602309996,
+            121.09297412071,
+        ],
+    );
+}
+
+/// `stlf()` with the naive and the drift methods on what is left.
+#[test]
+fn forecasts_by_decomposition_match_r() {
+    use foresight::models::{Decomposed, Naive};
+    let icms = column(0);
+    let series = Series::new(&icms, 12);
+    exactly(
+        "stlf naive",
+        &Decomposed::new(Naive).forecast(series, 12).unwrap(),
+        &[
+            788061202.72154,
+            795059525.55471,
+            789233907.08247,
+            786475266.23672,
+            800670860.26393,
+            809264287.47215,
+            808734039.80359,
+            737205954.47647,
+            696410778.83617,
+            750153769.60324,
+            735018340.48927,
+            785725856.19000,
+        ],
+    );
+    exactly(
+        "stlf drift",
+        &Decomposed::new(Drift).forecast(series, 12).unwrap(),
+        &[
+            792191829.46341,
+            803320779.03844,
+            801625787.30807,
+            802997773.20418,
+            821323993.97325,
+            834048047.92334,
+            837648426.99665,
+            770250968.41139,
+            733586419.51296,
+            791460037.02190,
+            780455234.64979,
+            835293377.09239,
+        ],
+    );
 }

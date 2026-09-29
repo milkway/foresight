@@ -12,9 +12,11 @@
 //! | [`Prophet`] | optional | 4 observations |
 //!
 //! Any model can run on the log or another Box-Cox scale through
-//! [`Transformed`].
+//! [`Transformed`], and on the seasonally adjusted series through
+//! [`Decomposed`].
 
 mod arima;
+mod decomposed;
 mod ets;
 mod holt_winters;
 mod log_linear;
@@ -23,6 +25,7 @@ mod prophet;
 mod theta;
 
 pub use arima::{Arima, ArimaFit, AutoArima, Criterion};
+pub use decomposed::Decomposed;
 pub use ets::{AutoEts, ErrorKind, Ets, EtsFit, Season, Trend};
 pub use holt_winters::HoltWinters;
 pub use log_linear::LogLinear;
@@ -58,6 +61,10 @@ pub fn defaults() -> Vec<Candidate> {
 pub fn thorough() -> Vec<Candidate> {
     let mut c = defaults();
     c.push(Candidate::new(AutoEts::new()));
+    c.push(Candidate::new(Decomposed::new(AutoEts::new())));
+    c.push(Candidate::new(Transformed::log(Decomposed::new(
+        AutoEts::new(),
+    ))));
     c.push(Candidate::new(AutoArima::new()));
     c.push(Candidate::new(Transformed::log(AutoArima::new())));
     c

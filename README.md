@@ -54,6 +54,19 @@ let fit = model.fit(Series::monthly(&values, 0)).unwrap();
 let next_year = fit.forecast(12);
 ```
 
+Several seasonal patterns at once:
+
+```rust
+use foresight::{decompose::Mstl, models::{AutoEts, Decomposed}, Model, Series};
+
+// daily data with a weekly and a yearly pattern
+let parts = Mstl::new(&[7, 365]).decompose(&values).unwrap();
+println!("weekly strength {:.2}", parts.seasonal_strength(0).unwrap());
+
+let model = Decomposed::new(AutoEts::new()).periods(&[7, 365]);
+let next_month = model.forecast(Series::new(&values, 7), 30).unwrap();
+```
+
 A trend that bends, with dated events:
 
 ```rust
@@ -83,6 +96,8 @@ println!("ARIMA{:?}{:?}, AICc {:.1}", fit.order(), fit.seasonal_order(), fit.aic
 | `Series` | values + seasonal period; slices keep season and position |
 | `Model` / `Fitted` | fit once, forecast any horizon, inspect parameters |
 | `models` | `Mean`, `Naive`, `Drift`, `SeasonalNaive`, `Theta`, `HoltWinters`, `LogLinear` (optionally deflated by a price index), `Arima` (seasonal, exact maximum likelihood), `AutoArima` (differences by tests, orders by stepwise search), `Prophet` (trend with changepoints, Fourier seasonality, dated events and steps), `Ets` (the exponential smoothing family in state space form), `AutoEts` (error, trend and season by information criterion) |
+| `decompose` | `Stl` (seasonal-trend decomposition by LOESS, optionally robust) and `Mstl` (several seasonal periods), with strength of trend and of each seasonal pattern |
+| `Decomposed` | any model on the seasonally adjusted series, the seasonal patterns added back to its forecasts |
 | `Transformed`, `BoxCox` | any model on the log or another Box-Cox scale; λ by Guerrero's method |
 | `Backtest` | rolling origin (expanding or fixed window) on all cores; MAPE, MAE, RMSE, MASE and bias by horizon; average of the best models; choice by out-of-sample error |
 | intervals | empirical quantiles of the backtest errors, by horizon and for cumulative totals |
@@ -113,6 +128,7 @@ packages `forecast` 9.0.2 and `prophet` 1.1.7 on public data
 | Number of differences (KPSS), seasonal differences | same decisions |
 | Box-Cox λ (Guerrero) | within 0.001 |
 | Prophet (linear growth, additive seasonality) | forecasts within 0.5% |
+| STL, MSTL (one and two seasonal periods), forecasts by decomposition | exact (10 digits) |
 | ETS, 8 models × 3 series | likelihood equal to R's where R reaches the maximum, higher in the other cases |
 | Automatic ETS | same model on 2 of 3 series |
 | Automatic ARIMA orders | same model on 2 of 3 series; on the third the two stepwise searches end within one unit of AICc |
@@ -157,8 +173,7 @@ all horizons:
 
 ## Status
 
-Early: the API may change before 1.0. Planned: STL and multiple seasonality, regressors (regression with ARIMA
-errors), TBATS, intermittent demand (Croston) and outlier cleaning.
+Early: the API may change before 1.0. Planned: regressors (regression with ARIMA errors), TBATS, intermittent demand (Croston) and outlier cleaning.
 
 ## Development
 
