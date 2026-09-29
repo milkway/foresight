@@ -10,6 +10,7 @@
 //! | [`Arima`], [`AutoArima`] | optional | enough observations after differencing |
 //! | [`Ets`], [`AutoEts`] | optional | 2 cycles when seasonal; positive values for multiplicative parts |
 //! | [`Prophet`] | optional | 4 observations |
+//! | [`Tbats`] | optional, several periods, not necessarily whole | 8 observations |
 //!
 //! Any model can run on the log or another Box-Cox scale through
 //! [`Transformed`], and on the seasonally adjusted series through
@@ -22,6 +23,7 @@ mod holt_winters;
 mod log_linear;
 mod naive;
 mod prophet;
+mod tbats;
 mod theta;
 
 pub use arima::{Arima, ArimaFit, ArimaX, AutoArima, Criterion};
@@ -31,6 +33,7 @@ pub use holt_winters::HoltWinters;
 pub use log_linear::LogLinear;
 pub use naive::{Drift, Mean, Naive, SeasonalNaive};
 pub use prophet::{Prophet, ProphetFit};
+pub use tbats::{Tbats, TbatsFit};
 pub use theta::Theta;
 
 use crate::backtest::Candidate;

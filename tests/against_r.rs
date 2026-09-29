@@ -987,3 +987,54 @@ fn regression_with_arima_errors_matches_r() {
         1e-5,
     );
 }
+
+// ---------------------------------------------------------------- TBATS
+
+/// `tbats()` with the structure fixed (trend, no damping, no ARMA errors):
+/// series, Box-Cox, harmonics chosen by R and the likelihood it reached (the
+/// lower the better); see `tests/r/reference_tbats.R`.
+const TBATS: [(&str, bool, usize, f64); 6] = [
+    ("air", false, 5, 1528.996664),
+    ("air", true, 5, 1363.015011),
+    ("icms", false, 5, 4428.878321),
+    ("icms", true, 4, 4432.587273),
+    ("fpe", false, 5, 4525.50601),
+    ("fpe", true, 5, 4473.182864),
+];
+
+/// As with ETS, R's search stops short of the optimum; with the initial
+/// states solved by least squares ours has fewer numbers to find.
+#[test]
+fn tbats_likelihood_is_never_above_r() {
+    use foresight::models::Tbats;
+    for (name, box_cox, harmonics, likelihood) in TBATS {
+        let values = ets_series(name);
+        let fit = Tbats::new(&[])
+            .harmonics(&[harmonics])
+            .box_cox(box_cox)
+            .trend(true)
+            .damped(false)
+            .arma_errors(false)
+            .select(Series::new(&values, 12))
+            .unwrap();
+        assert!(
+            fit.likelihood() < likelihood + 1e-3,
+            "{name} {box_cox}: {} × {likelihood}",
+            fit.likelihood()
+        );
+        // the criterion counts parameters and states as R does
+        let counted = 4 + usize::from(box_cox) + 2 + 2 * harmonics;
+        assert!((fit.aic() - fit.likelihood() - 2.0 * counted as f64).abs() < 1e-9);
+    }
+}
+
+/// `tbats(y)`, everything chosen: R's AIC was 1397.0, 4458.8 and 4481.5.
+#[test]
+fn automatic_tbats_is_no_worse_than_r() {
+    use foresight::models::Tbats;
+    for (name, aic) in [("icms", 4458.778729), ("fpe", 4481.456179)] {
+        let values = ets_series(name);
+        let fit = Tbats::new(&[]).select(Series::new(&values, 12)).unwrap();
+        assert!(fit.aic() < aic, "{name}: {} × {aic}", fit.aic());
+    }
+}

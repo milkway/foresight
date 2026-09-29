@@ -397,6 +397,12 @@ impl Model for ArimaX {
     }
 }
 
+/// Coefficients of a stationary autoregression from unconstrained numbers,
+/// for the models that have ARMA parts of their own.
+pub(crate) fn stationary_coefficients(u: &[f64]) -> Vec<f64> {
+    stationary(u)
+}
+
 struct Parts {
     ar: Vec<f64>,
     ma: Vec<f64>,

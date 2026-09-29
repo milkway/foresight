@@ -40,7 +40,8 @@ let semestre = melhor.cumulative(6).unwrap();
 - Modelos: média, ingênuo, tendência, sazonal ingênuo, Theta, Holt-Winters,
   regressão log-linear (com deflator opcional), ARIMA sazonal por máxima
   verossimilhança exata, ARIMA com ordens automáticas, a família ETS de
-  suavização exponencial com escolha automática e Prophet (tendência com
+  suavização exponencial com escolha automática, TBATS (sazonalidade
+  trigonométrica, períodos longos ou fracionários) e Prophet (tendência com
   pontos de quebra, sazonalidade de Fourier, eventos datados e degraus), sem Stan.
 - Decomposição STL e MSTL (várias sazonalidades) e previsão por decomposição
   (`Decomposed`).

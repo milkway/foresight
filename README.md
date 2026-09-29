@@ -107,7 +107,7 @@ println!("ARIMA{:?}{:?}, AICc {:.1}", fit.order(), fit.seasonal_order(), fit.aic
 |---|---|
 | `Series` | values + seasonal period; slices keep season and position |
 | `Model` / `Fitted` | fit once, forecast any horizon, inspect parameters |
-| `models` | `Mean`, `Naive`, `Drift`, `SeasonalNaive`, `Theta`, `HoltWinters`, `LogLinear` (optionally deflated by a price index), `Arima` (seasonal, exact maximum likelihood), `AutoArima` (differences by tests, orders by stepwise search), `Prophet` (trend with changepoints, Fourier seasonality, dated events and steps), `Ets` (the exponential smoothing family in state space form), `AutoEts` (error, trend and season by information criterion) |
+| `models` | `Mean`, `Naive`, `Drift`, `SeasonalNaive`, `Theta`, `HoltWinters`, `LogLinear` (optionally deflated by a price index), `Arima` (seasonal, exact maximum likelihood), `AutoArima` (differences by tests, orders by stepwise search), `Prophet` (trend with changepoints, Fourier seasonality, dated events and steps), `Ets` (the exponential smoothing family in state space form), `AutoEts` (error, trend and season by information criterion), `Tbats` (trigonometric seasonality for long, fractional or several periods, Box-Cox, ARMA errors, all chosen by AIC) |
 | `decompose` | `Stl` (seasonal-trend decomposition by LOESS, optionally robust) and `Mstl` (several seasonal periods), with strength of trend and of each seasonal pattern |
 | `Decomposed` | any model on the seasonally adjusted series, the seasonal patterns added back to its forecasts |
 | `Regressors` | external variables aligned with the data, Fourier terms for smooth or long seasonal patterns, seasonal dummies; `Arima::with_regressors` and `AutoArima::regressors` fit a regression with ARIMA errors |
@@ -145,6 +145,8 @@ packages `forecast` 9.0.2 and `prophet` 1.1.7 on public data
 | STL, MSTL (one and two seasonal periods), forecasts by decomposition | exact (10 digits) |
 | ETS, 8 models × 3 series | likelihood equal to R's where R reaches the maximum, higher in the other cases |
 | Automatic ETS | same model on 2 of 3 series |
+| TBATS, 2 structures × 3 series | likelihood better than R's in all 6 |
+| Automatic TBATS | AIC lower than R's on the 3 series |
 | Automatic ARIMA orders | same model on 2 of 3 series; on the third the two stepwise searches end within one unit of AICc |
 
 Theta and ARIMA differ from R only by the optimiser: the estimates are the
@@ -158,6 +160,10 @@ method that often stops short of the maximum. Here the search starts from
 three points and restarts, and the likelihood found was never lower than R's
 in 24 cases; on the airline passengers that changes the automatic choice from
 ETS(M,Ad,M) to ETS(M,A,M).
+
+TBATS is the slow one: choosing its structure takes 2 to 12 seconds for a
+monthly series of ten years, against about one second in R, so it is not part
+of the built-in sets of candidates.
 
 The Prophet here covers equally spaced series, linear growth and additive
 components (fit on the log scale for multiplicative behaviour); events are
@@ -187,7 +193,7 @@ all horizons:
 
 ## Status
 
-Early: the API may change before 1.0. Planned: TBATS, intermittent demand (Croston) and outlier cleaning.
+Early: the API may change before 1.0. Planned: intermittent demand (Croston) and outlier cleaning.
 
 ## Development
 

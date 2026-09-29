@@ -293,7 +293,7 @@ seasonal_naive         MAPE 11.45%</code></pre>
       <h2>Models</h2>
       <p class="sub">From the yardsticks every model must beat to the exponential smoothing family, seasonal ARIMA with automatic orders and Prophet with dated events. Any of them can run on the log or another Box-Cox scale, or on the series seasonally adjusted by STL, with several seasonal periods at once.</p>
       <div class="pills">
-        <span class="pill">Mean</span><span class="pill">Naive</span><span class="pill">Drift</span><span class="pill">SeasonalNaive</span><span class="pill">Theta</span><span class="pill">HoltWinters</span><span class="pill">LogLinear</span><span class="pill">Arima</span><span class="pill">AutoArima</span><span class="pill">Prophet</span><span class="pill">Ets</span><span class="pill">AutoEts</span><span class="pill">ArimaX</span><span class="pill">Regressors</span><span class="pill">Decomposed&lt;M&gt;</span><span class="pill">Stl</span><span class="pill">Mstl</span><span class="pill">Transformed&lt;M&gt;</span><span class="pill">BoxCox</span>
+        <span class="pill">Mean</span><span class="pill">Naive</span><span class="pill">Drift</span><span class="pill">SeasonalNaive</span><span class="pill">Theta</span><span class="pill">HoltWinters</span><span class="pill">LogLinear</span><span class="pill">Arima</span><span class="pill">AutoArima</span><span class="pill">Prophet</span><span class="pill">Ets</span><span class="pill">AutoEts</span><span class="pill">Tbats</span><span class="pill">ArimaX</span><span class="pill">Regressors</span><span class="pill">Decomposed&lt;M&gt;</span><span class="pill">Stl</span><span class="pill">Mstl</span><span class="pill">Transformed&lt;M&gt;</span><span class="pill">BoxCox</span>
       </div>
       <p class="note">ARIMA is estimated by exact Gaussian maximum likelihood with the innovations algorithm, searching over partial autocorrelations so the estimates are always stationary and invertible. External variables and Fourier terms enter as a regression with ARIMA errors, estimated together with the model. Automatic orders follow Hyndman &amp; Khandakar (2008): differences by the KPSS test and the strength of seasonality, the rest by stepwise search on AICc. Prophet is fitted without Stan: for a given noise level its posterior is a lasso with ridge terms, solved exactly, so the changepoints that do not matter come out as exactly zero. Your own model is one trait away: implement <code>Model</code> and it joins the backtest.</p>
     </div>
@@ -402,6 +402,7 @@ println!(<span class="c-str">"{:?}{:?} AICc {}"</span>,
             <tr><td>Regression with ARIMA errors</td><td>Forecasts within 0.001%, same likelihood</td></tr>
             <tr><td>STL, MSTL with one and two seasonal periods, forecasts by decomposition</td><td>Exact (10 digits)</td></tr>
             <tr><td>Exponential smoothing (ETS), 8 models × 3 series</td><td>Likelihood equal to R's where R reaches the maximum, higher in the other cases</td></tr>
+            <tr><td>TBATS, 2 structures × 3 series, and automatic</td><td>Likelihood and AIC better than R's in every case</td></tr>
             <tr><td>Automatic ARIMA orders</td><td>Same model on 2 of 3 series; on the third the two searches end within one unit of AICc</td></tr>
           </tbody>
         </table>
