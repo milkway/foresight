@@ -5,8 +5,10 @@ mod auto;
 
 pub use auto::{AutoArima, Criterion};
 
+use crate::linalg::solve;
 use crate::model::{Fitted, Model, Params};
 use crate::optimize::{nelder_mead, Effort};
+use crate::regressors::Regressors;
 use crate::series::Series;
 use arma::{expand, roots_outside, stationary, Arma};
 
@@ -100,25 +102,34 @@ impl Arima {
     /// The likelihood of a mixed model can have more than one peak, so the
     /// search starts from three points and keeps the best.
     pub fn estimate(&self, y: Series<'_>) -> Option<ArimaFit> {
-        self.estimate_from(y, None)
+        self.estimate_from(y, None, None)
+    }
+
+    /// The same model with external variables: a regression whose errors
+    /// follow the ARIMA model. The coefficients of the regression and of the
+    /// model are estimated together.
+    pub fn with_regressors(self, regressors: Regressors) -> ArimaX {
+        ArimaX {
+            model: self,
+            regressors,
+        }
     }
 
     /// Unconstrained starting values with the autoregressive partial
     /// autocorrelations at `ar` and the moving average ones at `ma`.
-    fn start(&self, ar: f64, ma: f64, constant: bool) -> Vec<f64> {
+    fn start(&self, ar: f64, ma: f64) -> Vec<f64> {
         let mut u = Vec::new();
         u.extend(std::iter::repeat_n(ar.atanh(), self.p));
         u.extend(std::iter::repeat_n(ma.atanh(), self.q));
         u.extend(std::iter::repeat_n(ar.atanh(), self.sp));
         u.extend(std::iter::repeat_n(ma.atanh(), self.sq));
-        u.extend(std::iter::repeat_n(0.0, usize::from(constant)));
         u
     }
 
     /// Starting values taken from a fitted model of other orders: what both
     /// have in common is kept and the rest starts at zero, which describes
     /// the same process.
-    fn start_near(&self, other: &ArimaFit, constant: bool) -> Vec<f64> {
+    fn start_near(&self, other: &ArimaFit) -> Vec<f64> {
         let o = &other.spec;
         let blocks = [
             (self.p, o.p),
@@ -138,15 +149,17 @@ impl Arima {
             }
             at += theirs;
         }
-        if constant {
-            u.push(other.unconstrained.get(at).copied().unwrap_or(0.0));
-        }
         u
     }
 
-    /// [`estimate`](Arima::estimate), or a quicker search from a neighbouring
-    /// model when one is given — enough to compare models.
-    pub(crate) fn estimate_from(&self, y: Series<'_>, near: Option<&ArimaFit>) -> Option<ArimaFit> {
+    /// [`estimate`](Arima::estimate) with regressors, or a quicker search from
+    /// a neighbouring model when one is given — enough to compare models.
+    pub(crate) fn estimate_from(
+        &self,
+        y: Series<'_>,
+        regressors: Option<&Regressors>,
+        near: Option<&ArimaFit>,
+    ) -> Option<ArimaFit> {
         let m = y.period();
         let spec = self.for_period(m);
         if !y.is_finite() {
@@ -158,61 +171,98 @@ impl Arima {
         if v.len() <= lost {
             return None;
         }
-        let w: Vec<f64> = (lost..v.len())
-            .map(|t| delta.iter().enumerate().map(|(k, c)| c * v[t - k]).sum())
-            .collect();
+        let differenced = |level: &dyn Fn(usize) -> f64| -> Vec<f64> {
+            (lost..v.len())
+                .map(|t| {
+                    delta
+                        .iter()
+                        .enumerate()
+                        .map(|(k, c)| c * level(t - k))
+                        .sum()
+                })
+                .collect()
+        };
+        let w = differenced(&|t| v[t]);
         let n = w.len();
         let coefficients = spec.p + spec.q + spec.sp + spec.sq;
         let longest = (spec.p + spec.sp * m).max(spec.q + spec.sq * m);
-        if n < longest + coefficients + 8 {
-            return None;
-        }
-        let mean = w.iter().sum::<f64>() / n as f64;
-        let spread = (w.iter().map(|x| (x - mean) * (x - mean)).sum::<f64>() / n as f64).sqrt();
-        if spread.is_nan() {
-            return None;
-        }
         let constant = spec.has_constant();
-        // the constant moves in units of its standard error
-        let unit = if spread > 0.0 {
-            spread / (n as f64).sqrt()
-        } else {
-            1.0
-        };
+        // what is explained by regression: the constant and the regressors,
+        // on the differenced scale
+        let mut explained: Vec<Vec<f64>> = Vec::new();
+        if constant {
+            explained.push(vec![1.0; n]);
+        }
+        if let Some(x) = regressors {
+            if !x.covers(y.index(v.len())) {
+                return None;
+            }
+            for column in x.columns() {
+                explained.push(differenced(&|t| column[y.index(t)]));
+            }
+        }
+        let width = explained.len();
+        if n < longest + coefficients + width + 8 {
+            return None;
+        }
 
-        let build = |u: &[f64]| -> (Parts, f64) {
+        let build = |u: &[f64]| -> Parts {
             let (ar, rest) = u.split_at(spec.p);
             let (ma, rest) = rest.split_at(spec.q);
-            let (sar, rest) = rest.split_at(spec.sp);
-            let (sma, rest) = rest.split_at(spec.sq);
-            let parts = Parts {
+            let (sar, sma) = rest.split_at(spec.sp);
+            Parts {
                 ar: stationary(ar),
                 ma: stationary(ma).iter().map(|c| -c).collect(),
                 sar: stationary(sar),
                 sma: stationary(sma).iter().map(|c| -c).collect(),
-            };
-            let mu = match rest.first() {
-                Some(c) => mean + c * unit,
-                None => 0.0,
-            };
-            (parts, mu)
+            }
         };
-        let evaluate = |u: &[f64]| -> Option<(f64, f64, f64, Vec<f64>)> {
-            let (parts, mu) = build(u);
-            let arma = parts.arma(m);
-            let x: Vec<f64> = w.iter().map(|v| v - mu).collect();
+        // for given ARMA coefficients the prediction errors are linear in the
+        // data, so the regression is least squares on the filtered columns
+        let evaluate = |u: &[f64]| -> Option<Evaluation> {
+            let arma = build(u).arma(m);
             let inn = arma.innovations(n - 1)?;
-            let f = arma.filter(&x, &inn);
+            let scaled = |x: &[f64]| -> Vec<f64> {
+                arma.filter(x, &inn)
+                    .errors
+                    .iter()
+                    .zip(&inn.v)
+                    .map(|(e, v)| e / v.sqrt())
+                    .collect()
+            };
+            let target = scaled(&w);
+            let columns: Vec<Vec<f64>> = explained.iter().map(|c| scaled(c)).collect();
+            let dot = |a: &[f64], b: &[f64]| -> f64 { a.iter().zip(b).map(|(x, z)| x * z).sum() };
+            let beta = if width == 0 {
+                Vec::new()
+            } else {
+                let gram = columns
+                    .iter()
+                    .map(|a| columns.iter().map(|b| dot(a, b)).collect())
+                    .collect();
+                let moment = columns.iter().map(|a| dot(a, &target)).collect();
+                solve(gram, moment)?
+            };
+            let centred: Vec<f64> = (0..n)
+                .map(|t| w[t] - (0..width).map(|j| beta[j] * explained[j][t]).sum::<f64>())
+                .collect();
+            let f = arma.filter(&centred, &inn);
             let sigma2 = f.sum_squares / n as f64;
             if !sigma2.is_finite() || !f.log_det.is_finite() {
                 return None;
             }
-            Some((sigma2, f.log_det, mu, f.errors))
+            Some(Evaluation {
+                sigma2,
+                log_det: f.log_det,
+                beta,
+                centred,
+                errors: f.errors,
+            })
         };
         // −2 log likelihood with the variance concentrated out, up to a constant
         let objective = |u: &[f64]| -> f64 {
             match evaluate(u) {
-                Some((sigma2, log_det, _, _)) if sigma2 > 0.0 => n as f64 * sigma2.ln() + log_det,
+                Some(e) if e.sigma2 > 0.0 => n as f64 * e.sigma2.ln() + e.log_det,
                 // a perfect fit: nothing left to explain
                 Some(_) => -1e300,
                 None => f64::INFINITY,
@@ -220,27 +270,27 @@ impl Arima {
         };
 
         let (starts, effort) = match near {
-            Some(other) => (vec![spec.start_near(other, constant)], Effort::QUICK),
+            Some(other) => (vec![spec.start_near(other)], Effort::QUICK),
             None if coefficients > 1 => (
                 vec![
-                    spec.start(0.0, 0.0, constant),
-                    spec.start(0.5, 0.5, constant),
-                    spec.start(-0.5, -0.5, constant),
+                    spec.start(0.0, 0.0),
+                    spec.start(0.5, 0.5),
+                    spec.start(-0.5, -0.5),
                 ],
                 Effort::THOROUGH,
             ),
-            None => (vec![spec.start(0.0, 0.0, constant)], Effort::THOROUGH),
+            None => (vec![spec.start(0.0, 0.0)], Effort::THOROUGH),
         };
         let (u, _) = starts
             .iter()
             .map(|s| nelder_mead(&objective, s, 0.5, effort))
             .min_by(|a, b| a.1.total_cmp(&b.1))?;
-        let (sigma2, log_det, mu, errors) = evaluate(&u)?;
-        let (parts, _) = build(&u);
+        let e = evaluate(&u)?;
+        let parts = build(&u);
         let nf = n as f64;
-        let k = (coefficients + usize::from(constant) + 1) as f64;
-        let log_likelihood = if sigma2 > 0.0 {
-            -0.5 * (nf * (2.0 * std::f64::consts::PI * sigma2).ln() + log_det + nf)
+        let k = (coefficients + width + 1) as f64;
+        let log_likelihood = if e.sigma2 > 0.0 {
+            -0.5 * (nf * (2.0 * std::f64::consts::PI * e.sigma2).ln() + e.log_det + nf)
         } else {
             f64::INFINITY
         };
@@ -250,6 +300,7 @@ impl Arima {
         } else {
             f64::INFINITY
         };
+        let slopes = &e.beta[usize::from(constant)..];
         Some(ArimaFit {
             spec,
             period: m,
@@ -258,18 +309,91 @@ impl Arima {
             ma: parts.ma,
             seasonal_ar: parts.sar,
             seasonal_ma: parts.sma,
-            constant: constant.then_some(mu),
-            sigma2,
+            constant: constant.then(|| e.beta[0]),
+            regression: regressors
+                .map(|x| {
+                    x.names()
+                        .iter()
+                        .cloned()
+                        .zip(slopes.iter().copied())
+                        .collect()
+                })
+                .unwrap_or_default(),
+            sigma2: e.sigma2,
             log_likelihood,
             aic,
             aicc,
             bic: -2.0 * log_likelihood + k * nf.ln(),
-            residuals: errors,
+            residuals: e.errors,
             unconstrained: u,
-            centred: w.iter().map(|v| v - mu).collect(),
+            centred: e.centred,
             tail: v[v.len() - lost..].to_vec(),
             delta,
+            regressors: regressors.cloned(),
+            next: y.index(v.len()),
         })
+    }
+}
+
+/// The likelihood at one point of the search and what comes with it.
+struct Evaluation {
+    sigma2: f64,
+    log_det: f64,
+    /// Coefficients of the constant and of the regressors.
+    beta: Vec<f64>,
+    /// The differenced series without what the regression explains.
+    centred: Vec<f64>,
+    errors: Vec<f64>,
+}
+
+/// An ARIMA model with external variables: a regression with ARIMA errors.
+///
+/// ```
+/// use foresight::{models::Arima, Model, Regressors, Series};
+///
+/// // a level that follows a known variable, which we also know ahead
+/// let x: Vec<f64> = (0..70).map(|t| ((t * 7) % 11) as f64).collect();
+/// let y: Vec<f64> = (0..60).map(|t| 20.0 + 3.0 * x[t] + 0.1 * ((t * 5) % 7) as f64).collect();
+/// let model = Arima::new(1, 0, 0).with_regressors(Regressors::new().with("x", x.clone()));
+/// let fit = model.estimate(Series::non_seasonal(&y)).unwrap();
+/// assert!((fit.regression[0].1 - 3.0).abs() < 0.05);
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+pub struct ArimaX {
+    model: Arima,
+    regressors: Regressors,
+}
+
+impl ArimaX {
+    /// Fits the model and returns everything that was estimated. `None` when
+    /// the regressors do not cover the history or are collinear.
+    pub fn estimate(&self, y: Series<'_>) -> Option<ArimaFit> {
+        self.model.estimate_from(y, Some(&self.regressors), None)
+    }
+}
+
+impl Model for ArimaX {
+    fn name(&self) -> String {
+        format!("{}_x", self.model.name())
+    }
+
+    fn description(&self) -> String {
+        format!(
+            "Regression on {} with errors that follow {}",
+            self.regressors.names().join(", "),
+            self.model.description()
+        )
+    }
+
+    fn fit(&self, y: Series<'_>) -> Option<Box<dyn Fitted>> {
+        Some(Box::new(self.estimate(y)?))
+    }
+
+    fn forecast(&self, y: Series<'_>, h: usize) -> Option<Vec<f64>> {
+        if !self.regressors.covers(y.index(y.len()) + h) {
+            return None;
+        }
+        Some(self.estimate(y)?.forecast(h))
     }
 }
 
@@ -327,6 +451,8 @@ pub struct ArimaFit {
     pub seasonal_ma: Vec<f64>,
     /// Mean of the differenced series, when estimated.
     pub constant: Option<f64>,
+    /// Coefficient of each regressor.
+    pub regression: Vec<(String, f64)>,
     /// Innovation variance (maximum likelihood, not corrected for degrees of
     /// freedom).
     pub sigma2: f64,
@@ -342,6 +468,9 @@ pub struct ArimaFit {
     /// Last observations of the original series, to undo the differences.
     tail: Vec<f64>,
     delta: Vec<f64>,
+    regressors: Option<Regressors>,
+    /// Position in the original data of the first period to forecast.
+    next: usize,
 }
 
 impl ArimaFit {
@@ -414,13 +543,33 @@ impl Fitted for ArimaFit {
         };
         let mu = self.constant.unwrap_or(0.0);
         let lost = self.delta.len() - 1;
+        // what the regressors explain of the differenced series at a position
+        // of the original data; not a number where their values are missing
+        let explained = |at: usize| -> f64 {
+            let Some(x) = &self.regressors else {
+                return 0.0;
+            };
+            x.columns()
+                .iter()
+                .zip(&self.regression)
+                .map(|(column, (_, slope))| {
+                    let change: f64 = self
+                        .delta
+                        .iter()
+                        .enumerate()
+                        .map(|(k, c)| c * column.get(at - k).copied().unwrap_or(f64::NAN))
+                        .sum();
+                    slope * change
+                })
+                .sum()
+        };
         // undo the differences: y(t) = w(t) − Σ δₖ y(t − k)
         let mut path = self.tail.clone();
-        for w in differenced {
+        for (k, w) in differenced.into_iter().enumerate() {
             let back: f64 = (1..=lost)
                 .map(|k| self.delta[k] * path[path.len() - k])
                 .sum();
-            path.push(w + mu - back);
+            path.push(w + mu + explained(self.next + k) - back);
         }
         path.split_off(lost)
     }
@@ -440,6 +589,9 @@ impl Fitted for ArimaFit {
             // per period of the original series
             let scale = (self.period as f64).powi(self.spec.sd as i32);
             p.push((label(self.spec.differences()).into(), c / scale));
+        }
+        for (name, slope) in &self.regression {
+            p.push((format!("x_{name}"), *slope));
         }
         for (name, value) in [
             ("p", self.spec.p),
@@ -598,5 +750,73 @@ mod tests {
         assert!(Arima::new(1, 0, 0)
             .estimate(Series::non_seasonal(&[1.0, f64::NAN, 2.0]))
             .is_none());
+    }
+
+    #[test]
+    fn regression_with_arima_errors_recovers_the_slope_and_uses_future_values() {
+        let e = noise(140);
+        let x: Vec<f64> = (0..140).map(|t| ((t * 7) % 13) as f64).collect();
+        let mut error = 0.0;
+        let y: Vec<f64> = (0..140)
+            .map(|t| {
+                error = 0.6 * error + e[t];
+                50.0 + 2.5 * x[t] + error
+            })
+            .collect();
+        let model = Arima::new(1, 0, 0).with_regressors(Regressors::new().with("x", x.clone()));
+        let series = Series::non_seasonal(&y[..120]);
+        let fit = model.estimate(series).unwrap();
+        assert_eq!(fit.regression[0].0, "x");
+        assert!(
+            (fit.regression[0].1 - 2.5).abs() < 0.05,
+            "{:?}",
+            fit.regression
+        );
+        assert!((fit.ar[0] - 0.6).abs() < 0.2);
+        assert!((fit.constant.unwrap() - 50.0).abs() < 1.0);
+        for (k, v) in fit.forecast(20).iter().enumerate() {
+            assert!((v - y[120 + k]).abs() < 1.5, "h={}", k + 1);
+        }
+        assert!(fit.params().iter().any(|(k, _)| k == "x_x"));
+        assert_eq!(model.name(), "arima_100_x");
+        // the same from a slice of the series: rows are found by position
+        let sliced = model
+            .estimate(Series::non_seasonal(&y).slice(20..120))
+            .unwrap();
+        assert!((sliced.regression[0].1 - 2.5).abs() < 0.05);
+        assert!((sliced.forecast(1)[0] - y[120]).abs() < 1.5);
+    }
+
+    #[test]
+    fn regressors_must_cover_the_history_and_the_horizon() {
+        let e = noise(60);
+        let short = Regressors::new().with("x", (0..50).map(f64::from).collect());
+        let model = Arima::new(0, 0, 0).with_regressors(short);
+        assert!(model.estimate(Series::non_seasonal(&e)).is_none());
+        let enough = Regressors::new().with("x", (0..65).map(|t| f64::from(t % 5)).collect());
+        let model = Arima::new(0, 0, 0).with_regressors(enough);
+        let series = Series::non_seasonal(&e);
+        assert!(model.forecast(series, 5).is_some());
+        assert!(model.forecast(series, 6).is_none());
+        // asked directly, the fit answers with not-a-number past the rows
+        let p = model.estimate(series).unwrap().forecast(7);
+        assert!(p[4].is_finite() && p[5].is_nan());
+        // a column that repeats the constant cannot be told apart from it
+        let ones = Regressors::new().with("one", vec![1.0; 70]);
+        assert!(Arima::new(0, 0, 0)
+            .with_regressors(ones)
+            .estimate(series)
+            .is_none());
+    }
+
+    #[test]
+    fn the_constant_is_the_generalised_least_squares_mean() {
+        // without ARMA terms that is the plain mean
+        let e = noise(90);
+        let fit = Arima::new(0, 0, 0)
+            .estimate(Series::non_seasonal(&e))
+            .unwrap();
+        let mean = e.iter().sum::<f64>() / 90.0;
+        assert!((fit.constant.unwrap() - mean).abs() < 1e-12);
     }
 }

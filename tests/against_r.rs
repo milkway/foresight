@@ -881,3 +881,109 @@ fn forecasts_by_decomposition_match_r() {
         ],
     );
 }
+
+// ---------------------------------------------------------------- regression
+
+fn revenue_column(i: usize) -> Vec<f64> {
+    include_str!("../data/piaui_revenue.csv")
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.starts_with("month"))
+        .map(|l| l.split(',').nth(i).unwrap().parse().unwrap())
+        .collect()
+}
+
+/// `Arima(..., xreg = ...)`: regression with ARIMA errors; see
+/// `tests/r/reference_regression.R`.
+#[test]
+fn regression_with_arima_errors_matches_r() {
+    use foresight::models::Arima;
+    use foresight::{Fitted, Regressors};
+    let index = revenue_column(3);
+    let log = |v: &[f64]| -> Vec<f64> { v.iter().map(|x| x.ln()).collect() };
+
+    // a price index as regressor, known over the horizon
+    let icms = log(&revenue_column(1));
+    let fit = Arima::airline()
+        .with_regressors(Regressors::new().with("ipca", log(&index)))
+        .estimate(Series::new(&icms[..100], 12))
+        .unwrap();
+    assert!((fit.log_likelihood - 71.3269751088).abs() < 0.01);
+    assert!((fit.regression[0].1 - 3.628961167101).abs() < 0.01);
+    close(
+        "index",
+        &fit.forecast(12),
+        &[
+            20.4424516263,
+            20.4434249567,
+            20.4622874662,
+            20.4867207767,
+            20.4656206241,
+            20.5001900609,
+            20.5029053067,
+            20.3654429375,
+            20.3058916659,
+            20.4129127608,
+            20.3751970640,
+            20.4812495021,
+        ],
+        1e-5,
+    );
+
+    // harmonics instead of seasonal terms, with drift
+    let air = log(&air_passengers());
+    let fit = Arima::new(1, 1, 1)
+        .constant(true)
+        .with_regressors(Regressors::fourier(12.0, 3, 156))
+        .estimate(Series::new(&air, 12))
+        .unwrap();
+    assert!((fit.log_likelihood - 220.745055931).abs() < 0.01);
+    assert!((fit.constant.unwrap() - 0.00967443136167).abs() < 1e-5);
+    close(
+        "fourier",
+        &fit.forecast(12),
+        &[
+            6.11148655654,
+            6.15834008721,
+            6.21237653144,
+            6.23937234485,
+            6.26018036148,
+            6.35199276944,
+            6.48370469463,
+            6.50120081342,
+            6.35382780459,
+            6.18866955419,
+            6.14237100333,
+            6.18258040658,
+        ],
+        1e-5,
+    );
+
+    // a regression in levels with autoregressive errors
+    let fpe: Vec<f64> = revenue_column(2).iter().map(|x| x / 1e6).collect();
+    let fit = Arima::new(1, 0, 0)
+        .seasonal(1, 0, 0)
+        .with_regressors(Regressors::new().with("ipca", index))
+        .estimate(Series::new(&fpe[..100], 12))
+        .unwrap();
+    assert!((fit.log_likelihood - (-518.794753258)).abs() < 0.01);
+    assert!((fit.regression[0].1 / 779.684429653289 - 1.0).abs() < 1e-4);
+    close(
+        "level",
+        &fit.forecast(12),
+        &[
+            587.333383110,
+            716.756829324,
+            609.583369813,
+            635.668780286,
+            773.862676935,
+            852.013532527,
+            786.746648268,
+            996.754336707,
+            704.292578608,
+            719.312598386,
+            886.254521839,
+            901.118519974,
+        ],
+        1e-5,
+    );
+}

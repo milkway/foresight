@@ -24,7 +24,7 @@ mod naive;
 mod prophet;
 mod theta;
 
-pub use arima::{Arima, ArimaFit, AutoArima, Criterion};
+pub use arima::{Arima, ArimaFit, ArimaX, AutoArima, Criterion};
 pub use decomposed::Decomposed;
 pub use ets::{AutoEts, ErrorKind, Ets, EtsFit, Season, Trend};
 pub use holt_winters::HoltWinters;

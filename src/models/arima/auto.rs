@@ -2,7 +2,9 @@
 
 use super::{Arima, ArimaFit};
 use crate::diagnostics::{difference, ndiffs, nsdiffs};
+use crate::linalg::solve;
 use crate::model::{Fitted, Model};
+use crate::regressors::Regressors;
 use crate::series::Series;
 
 /// Information criterion that ranks the models.
@@ -42,6 +44,8 @@ pub struct AutoArima {
     pub criterion: Criterion,
     /// Most models the search will fit.
     pub max_models: usize,
+    /// External variables of a regression with ARIMA errors.
+    pub regressors: Option<Regressors>,
 }
 
 impl Default for AutoArima {
@@ -57,6 +61,7 @@ impl Default for AutoArima {
             seasonal_d: None,
             criterion: Criterion::Aicc,
             max_models: 94,
+            regressors: None,
         }
     }
 }
@@ -87,6 +92,48 @@ impl AutoArima {
         self
     }
 
+    /// External variables: the model becomes a regression with ARIMA errors,
+    /// and the differences are decided on what the regression leaves
+    /// unexplained.
+    pub fn regressors(mut self, regressors: Regressors) -> Self {
+        self.regressors = Some(regressors);
+        self
+    }
+
+    /// Residuals of the least squares regression of the series on a constant
+    /// and the regressors.
+    fn unexplained(&self, y: Series<'_>) -> Option<Vec<f64>> {
+        let v = y.values();
+        let Some(x) = &self.regressors else {
+            return Some(v.to_vec());
+        };
+        if !x.covers(y.index(v.len())) {
+            return None;
+        }
+        let mut columns = vec![vec![1.0; v.len()]];
+        for c in x.columns() {
+            columns.push((0..v.len()).map(|t| c[y.index(t)]).collect());
+        }
+        let dot = |a: &[f64], b: &[f64]| -> f64 { a.iter().zip(b).map(|(p, q)| p * q).sum() };
+        let gram = columns
+            .iter()
+            .map(|a| columns.iter().map(|b| dot(a, b)).collect())
+            .collect();
+        let moment = columns.iter().map(|a| dot(a, v)).collect();
+        let beta = solve(gram, moment)?;
+        Some(
+            (0..v.len())
+                .map(|t| {
+                    v[t] - columns
+                        .iter()
+                        .zip(&beta)
+                        .map(|(c, b)| c[t] * b)
+                        .sum::<f64>()
+                })
+                .collect(),
+        )
+    }
+
     fn score(&self, fit: &ArimaFit) -> f64 {
         match self.criterion {
             Criterion::Aicc => fit.aicc,
@@ -100,7 +147,10 @@ impl AutoArima {
         if !y.is_finite() || y.is_empty() {
             return None;
         }
-        let (v, m) = (y.values(), y.period());
+        let m = y.period();
+        let rest = self.unexplained(y)?;
+        let v = rest.as_slice();
+        let x = self.regressors.as_ref();
         let seasonal = m > 1;
         let constant_series = v.iter().all(|x| *x == v[0]);
         let sd = if !seasonal || constant_series {
@@ -140,7 +190,7 @@ impl AutoArima {
             tried.push(key);
             let model = Arima::new(p, d, q).seasonal(sp, sd, sq).constant(constant);
             let near = best.as_ref().map(|(_, _, fit)| fit);
-            let Some(fit) = model.estimate_from(y, near) else {
+            let Some(fit) = model.estimate_from(y, x, near) else {
                 return false;
             };
             let score = self.score(&fit);
@@ -197,7 +247,7 @@ impl AutoArima {
         let spec = Arima::new(fit.spec.p, d, fit.spec.q)
             .seasonal(fit.spec.sp, sd, fit.spec.sq)
             .constant(fit.constant.is_some());
-        match spec.estimate(y) {
+        match spec.estimate_from(y, x, None) {
             Some(again) if self.score(&again) < score && again.is_well_behaved(1.01) => Some(again),
             _ => Some(fit),
         }
@@ -215,6 +265,15 @@ impl Model for AutoArima {
 
     fn fit(&self, y: Series<'_>) -> Option<Box<dyn Fitted>> {
         Some(Box::new(self.select(y)?))
+    }
+
+    fn forecast(&self, y: Series<'_>, h: usize) -> Option<Vec<f64>> {
+        if let Some(x) = &self.regressors {
+            if !x.covers(y.index(y.len()) + h) {
+                return None;
+            }
+        }
+        Some(self.select(y)?.forecast(h))
     }
 }
 
@@ -282,5 +341,21 @@ mod tests {
             .unwrap();
         assert_eq!(fit.order().1, 1);
         assert!(AutoArima::new().select(Series::non_seasonal(&[])).is_none());
+    }
+
+    #[test]
+    fn with_regressors_the_differences_are_decided_on_what_is_left() {
+        let e = noise(150);
+        // a strong trend that a regressor explains: no difference is needed
+        let x: Vec<f64> = (0..160).map(|t| t as f64).collect();
+        let y: Vec<f64> = (0..150).map(|t| 10.0 + 0.8 * x[t] + e[t]).collect();
+        let series = Series::non_seasonal(&y);
+        assert_eq!(AutoArima::new().select(series).unwrap().order().1, 1);
+        let auto = AutoArima::new().regressors(Regressors::new().with("time", x));
+        let fit = auto.select(series).unwrap();
+        assert_eq!(fit.order().1, 0);
+        assert!((fit.regression[0].1 - 0.8).abs() < 0.01);
+        assert!(auto.forecast(series, 10).is_some());
+        assert!(auto.forecast(series, 11).is_none());
     }
 }

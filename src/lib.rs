@@ -45,6 +45,7 @@ mod linalg;
 pub mod model;
 pub mod models;
 mod optimize;
+pub mod regressors;
 pub mod series;
 #[cfg(test)]
 mod testing;
@@ -54,6 +55,7 @@ pub use backtest::{
     Backtest, Band, Candidate, CandidateReport, HorizonStats, Interval, Metric, Point, Report,
 };
 pub use model::{Fitted, Model, Params};
+pub use regressors::Regressors;
 pub use series::Series;
 pub use transform::{BoxCox, Transformed};
 
