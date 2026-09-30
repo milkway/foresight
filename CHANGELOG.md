@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.3
+
+- `Backtest::parallel(false)` now also keeps ensembles among the candidates on
+  the calling thread, as 0.7.2 said it did: they used to start threads of
+  their own. Results do not change.
+
 ## 0.7.2
 
 Fixes found in a review of the crate and of the packages built on it. Results

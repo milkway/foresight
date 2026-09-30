@@ -122,7 +122,14 @@ pub(crate) fn map_indices<T: Send>(
         1
     };
     if threads <= 1 {
-        return (0..n).map(f).collect();
+        if parallel {
+            return (0..n).map(f).collect();
+        }
+        // asked to stay on one thread: what it calls stays there too
+        let before = WORKING.with(|w| w.replace(true));
+        let out = (0..n).map(f).collect();
+        WORKING.with(|w| w.set(before));
+        return out;
     }
     let next = AtomicUsize::new(0);
     let done: std::sync::Mutex<Vec<Option<T>>> =
@@ -769,6 +776,16 @@ mod tests {
         });
         assert!(ids.into_iter().all(|same| same));
         // and the caller is free to go parallel again afterwards
+        assert!(!WORKING.with(Cell::get));
+    }
+
+    #[test]
+    fn a_sequential_computation_keeps_what_it_calls_on_its_thread() {
+        let here = std::thread::current().id();
+        let ids = map_indices(3, false, |_| {
+            map_indices(4, true, |_| std::thread::current().id())
+        });
+        assert!(ids.into_iter().flatten().all(|id| id == here));
         assert!(!WORKING.with(Cell::get));
     }
 

@@ -1,6 +1,6 @@
 [package]
 name = "foresight"
-version = "0.7.2"
+version = "0.7.3"
 authors = [
     "André Leite <leite@castlab.org>",
     "Hugo Vasconcelos <hugo.vasconcelos@ufpe.br>",
