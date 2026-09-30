@@ -61,6 +61,12 @@ let semestre = melhor.cumulative(6).unwrap();
 Os métodos foram implementados a partir dos artigos e conferidos com os pacotes
 `forecast` e `prophet` do R em dados públicos (`tests/against_r.rs`).
 
+## Autores
+
+- André Leite ([ORCID](https://orcid.org/0000-0002-4718-9766))
+- Hugo Vasconcelos ([ORCID](https://orcid.org/0000-0001-6249-0920))
+- Raydonal Ospina ([ORCID](https://orcid.org/0000-0002-9884-9090))
+
 ## Licença
 
 MIT. Veja [LICENSE-MIT](LICENSE-MIT).

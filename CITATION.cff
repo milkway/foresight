@@ -8,6 +8,14 @@ authors:
     affiliation: "Universidade Federal de Pernambuco"
     email: leite@castlab.org
     orcid: "https://orcid.org/0000-0002-4718-9766"
+  - family-names: Vasconcelos
+    given-names: Hugo
+    email: hugo.vasconcelos@ufpe.br
+    orcid: "https://orcid.org/0000-0001-6249-0920"
+  - family-names: Ospina
+    given-names: Raydonal
+    email: raydonal@castlab.org
+    orcid: "https://orcid.org/0000-0002-9884-9090"
 repository-code: "https://github.com/milkway/foresight"
 url: "https://milkway.github.io/foresight/"
 license: MIT

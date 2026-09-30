@@ -223,6 +223,14 @@ dependencies and trained weights.
 scripts/dev-check.sh   # fmt, clippy -D warnings, tests, docs
 ```
 
+## Authors
+
+- André Leite ([ORCID](https://orcid.org/0000-0002-4718-9766))
+- Hugo Vasconcelos ([ORCID](https://orcid.org/0000-0001-6249-0920))
+- Raydonal Ospina ([ORCID](https://orcid.org/0000-0002-9884-9090))
+
+See [CITATION.cff](CITATION.cff) to cite the software.
+
 ## License
 
 MIT. See [LICENSE-MIT](LICENSE-MIT).
