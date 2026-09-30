@@ -13,7 +13,7 @@ tem dependências e todo resultado é determinístico.
 ## Instalação
 
 ```bash
-cargo add --git https://github.com/milkway/foresight foresight
+cargo add foresight
 ```
 
 ## Uso básico

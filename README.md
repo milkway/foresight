@@ -1,6 +1,8 @@
 # foresight
 
 [![CI](https://github.com/milkway/foresight/actions/workflows/ci.yml/badge.svg)](https://github.com/milkway/foresight/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/foresight.svg)](https://crates.io/crates/foresight)
+[![docs.rs](https://img.shields.io/docsrs/foresight)](https://docs.rs/foresight)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
 [![Dependencies: none](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](Cargo.toml)
 [![Website](https://img.shields.io/badge/website-milkway.github.io%2Fforesight-8A2BE2.svg)](https://milkway.github.io/foresight/)
@@ -19,7 +21,7 @@ deterministic.
 ## Install
 
 ```bash
-cargo add --git https://github.com/milkway/foresight foresight
+cargo add foresight
 ```
 
 ## Use
