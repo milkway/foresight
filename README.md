@@ -24,6 +24,8 @@ deterministic.
 cargo add foresight
 ```
 
+Rust 1.81 or later. Changes between versions: [CHANGELOG.md](CHANGELOG.md).
+
 ## Use
 
 ```rust
@@ -32,7 +34,7 @@ use foresight::{models, Backtest, Series};
 // monthly data whose first observation is in March
 let y = Series::monthly(&values, 2);
 
-// replay the last 36 months, 12 months ahead, with every built-in model
+// replay the last 36 months, 12 months ahead, with the 11 default models
 let report = Backtest::default().run(y, &models::defaults()).unwrap();
 
 let best = report.chosen();

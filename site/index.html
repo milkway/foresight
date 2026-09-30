@@ -340,14 +340,14 @@ seasonal_naive         MAPE 11.45%</code></pre>
   <section id="install" class="alt">
     <div class="wrap">
       <h2>Install &amp; run</h2>
-      <p class="sub">Add the crate, describe the series, run the backtest.</p>
+      <p class="sub">Add the crate, describe the series, run the backtest. Rust 1.81 or later; changes between versions in the <a href="https://github.com/milkway/foresight/blob/main/CHANGELOG.md">changelog</a>.</p>
       <div class="panel" style="margin-bottom:18px">
 <pre><code><span class="c-prompt">$</span> <span class="c-cmd">cargo</span> add foresight</code></pre>
       </div>
       <div class="grid f2">
         <div>
           <div class="panel">
-<pre><code><span class="c-cmt">// choose among every built-in model</span>
+<pre><code><span class="c-cmt">// choose among the ready set of candidates</span>
 <span class="c-kw">use</span> foresight::{models, <span class="c-ty">Backtest</span>, <span class="c-ty">Series</span>};
 
 <span class="c-kw">let</span> y = <span class="c-ty">Series</span>::<span class="c-cmd">monthly</span>(&amp;values, <span class="c-flag">0</span>);
