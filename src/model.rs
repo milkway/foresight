@@ -21,15 +21,21 @@ pub trait Model: Send + Sync {
     /// unsuitable — never a made-up fit.
     fn fit(&self, y: Series<'_>) -> Option<Box<dyn Fitted>>;
 
-    /// Fits and forecasts the `h` periods after the last observation.
+    /// Fits and forecasts the `h` periods after the last observation. `None`
+    /// also when a forecast is not finite: regressors that do not reach the
+    /// horizon, or a transformation that cannot be brought back.
     fn forecast(&self, y: Series<'_>, h: usize) -> Option<Vec<f64>> {
-        Some(self.fit(y)?.forecast(h))
+        let forecast = self.fit(y)?.forecast(h);
+        forecast.iter().all(|v| v.is_finite()).then_some(forecast)
     }
 }
 
-/// A model estimated on a series.
-pub trait Fitted {
-    /// Point forecasts for the `h` periods after the last observation.
+/// A model estimated on a series. It is plain data: it can be kept, sent to
+/// another thread and asked for forecasts from several at once.
+pub trait Fitted: Send + Sync {
+    /// Point forecasts for the `h` periods after the last observation. They
+    /// are not finite where the model cannot say: past the rows of its
+    /// regressors, for instance. [`Model::forecast`] checks that.
     fn forecast(&self, h: usize) -> Vec<f64>;
 
     /// Estimated parameters.

@@ -33,6 +33,15 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
+  # The oldest Rust the crate promises to build with (rust-version).
+  msrv:
+    name: test (rust 1.81)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.81.0
+      - run: cargo test
+
   # The crate promises to build for the browser: no threads, no system calls.
   wasm:
     name: build (wasm32)

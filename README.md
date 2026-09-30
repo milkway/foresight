@@ -129,7 +129,7 @@ println!("ARIMA{:?}{:?}, AICc {:.1}", fit.order(), fit.seasonal_order(), fit.aic
 | `Croston` | intermittent demand: Croston, the Syntetos-Boylan correction and Teunter-Syntetos-Babai |
 | `clean` | gaps filled with the season they fall in, outliers found and replaced |
 | `Transformed`, `BoxCox` | any model on the log or another Box-Cox scale; λ by Guerrero's method |
-| `Backtest` | rolling origin (expanding or fixed window) on all cores; MAPE, MAE, RMSE, MASE and bias by horizon; average of the best models; choice by out-of-sample error |
+| `Backtest` | rolling origin (expanding or fixed window) on all cores, or on as many as `set_max_threads` allows; MAPE, MAE, RMSE, MASE and bias by horizon; average of the best models; choice by out-of-sample error |
 | intervals | empirical quantiles of the backtest errors, by horizon and for cumulative totals |
 | `diagnostics` | KPSS test, number of differences, strength of seasonality, autocorrelations |
 | `accuracy` | the measures and quantiles on their own |

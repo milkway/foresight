@@ -9,7 +9,7 @@
 //! | [`LogLinear`] | optional | 3 cycles, positive values |
 //! | [`Arima`], [`AutoArima`] | optional | enough observations after differencing |
 //! | [`Ets`], [`AutoEts`] | optional | 2 cycles when seasonal; positive values for multiplicative parts |
-//! | [`Prophet`] | optional | 4 observations |
+//! | [`Prophet`] | optional, from two cycles on | 4 observations |
 //! | [`Croston`] | no | values that are not negative |
 //! | [`Ensemble`] | as its members | what its members need |
 //! | [`Tbats`] | optional, several periods, not necessarily whole | 8 observations |

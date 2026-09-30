@@ -179,7 +179,7 @@ impl Model for Croston {
             self.alpha.unwrap_or(0.1)
         };
         let beta = self.beta.unwrap_or(alpha);
-        if !inside(alpha) || !inside(beta) {
+        if !inside(alpha) || (self.variant == Intermittent::Tsb && !inside(beta)) {
             return None;
         }
         // no demand at all: nothing is expected

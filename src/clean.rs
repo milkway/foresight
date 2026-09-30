@@ -30,8 +30,8 @@ fn linear(values: &[f64]) -> Option<Vec<f64>> {
     Some(out)
 }
 
-/// Fills the gaps. Without seasonality (period under 2, or fewer than two
-/// full cycles) by straight lines between the neighbours; with it, the
+/// Fills the gaps. Without seasonality (period under 2, or a series not
+/// longer than two full cycles) by straight lines between the neighbours; with it, the
 /// straight lines are drawn on the seasonally adjusted series and the
 /// seasonal pattern is put back, so a gap in December is filled with a
 /// December. `None` when no value is known.
@@ -108,7 +108,9 @@ pub fn outliers(values: &[f64], period: usize) -> Option<Vec<Outlier>> {
     };
     let distance: Vec<f64> = filled.iter().zip(&smooth).map(|(v, s)| v - s).collect();
     let (q1, q3) = (quantile(&distance, 0.25)?, quantile(&distance, 0.75)?);
-    let reach = 3.0 * (q3 - q1);
+    // on exact data the spread is rounding noise: nothing is that far from it
+    let size = filled.iter().fold(0.0f64, |a, v| a.max(v.abs()));
+    let reach = (3.0 * (q3 - q1)).max(1e-9 * size);
     let flagged: Vec<usize> = (0..n)
         .filter(|i| values[*i].is_finite())
         .filter(|i| distance[*i] < q1 - reach || distance[*i] > q3 + reach)

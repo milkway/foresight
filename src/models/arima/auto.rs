@@ -197,7 +197,14 @@ impl AutoArima {
             if !score.is_finite() || !fit.is_well_behaved(1.01) {
                 return false;
             }
-            if best.as_ref().is_none_or(|(s, _, _)| score < *s) {
+            // among models that fit equally (exact fits), the one with fewer
+            // parameters
+            let size = |k: &Key| k.0 + k.1 + k.2 + k.3 + usize::from(k.4);
+            let better = match best.as_ref() {
+                None => true,
+                Some((s, other, _)) => score < *s || (score == *s && size(&key) < size(other)),
+            };
+            if better {
                 *best = Some((score, key, fit));
                 return true;
             }

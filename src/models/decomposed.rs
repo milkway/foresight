@@ -98,7 +98,7 @@ impl<M: Model> Model for Decomposed<M> {
             .robust(self.robust)
             .decompose(y.values())?;
         let adjusted = d.seasonally_adjusted();
-        let inner = self.model.fit(Series::non_seasonal(&adjusted))?;
+        let inner = self.model.fit(y.flat(&adjusted))?;
         let cycles = d
             .periods
             .iter()

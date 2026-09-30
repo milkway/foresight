@@ -76,7 +76,7 @@ fn seasonal_indices(y: &[f64], m: usize) -> Option<Vec<f64>> {
     let mut sum = vec![0.0; m];
     let mut count = vec![0usize; m];
     for t in half..n.saturating_sub(half) {
-        let trend = if m.is_multiple_of(2) {
+        let trend = if m % 2 == 0 {
             let inner: f64 = y[t + 1 - half..t + half].iter().sum();
             (0.5 * y[t - half] + inner + 0.5 * y[t + half]) / m as f64
         } else {

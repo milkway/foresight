@@ -122,6 +122,18 @@ impl<'a> Series<'a> {
         })
     }
 
+    /// Other values at the same position, without seasonality: what is left
+    /// of this series once its seasonal patterns are taken out. Models that
+    /// go by position (regressors, events, a deflator) stay aligned.
+    pub(crate) fn flat<'b>(&self, values: &'b [f64]) -> Series<'b> {
+        Series {
+            values,
+            period: 1,
+            phase: 0,
+            start: self.start,
+        }
+    }
+
     /// True when every value is finite.
     pub fn is_finite(&self) -> bool {
         self.values.iter().all(|v| v.is_finite())

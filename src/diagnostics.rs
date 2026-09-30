@@ -89,7 +89,7 @@ pub fn seasonal_strength(y: &[f64], period: usize) -> Option<f64> {
     let half = m / 2;
     let mut detrended: Vec<(usize, f64)> = Vec::with_capacity(n);
     for t in half..n - half {
-        let trend = if m.is_multiple_of(2) {
+        let trend = if m % 2 == 0 {
             let inner: f64 = y[t + 1 - half..t + half].iter().sum();
             (0.5 * y[t - half] + inner + 0.5 * y[t + half]) / m as f64
         } else {

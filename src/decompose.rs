@@ -62,8 +62,9 @@ impl Decomposition {
 pub enum SeasonalWindow {
     /// The same pattern in every cycle.
     Periodic,
-    /// LOESS window over the cycles, an odd number of at least 7: the smaller,
-    /// the faster the pattern may change.
+    /// LOESS window over the cycles, an odd number, usually 7 or more: the
+    /// smaller, the faster the pattern may change. An even number is taken
+    /// as the next odd one, and the least is 3.
     Span(usize),
 }
 
@@ -100,7 +101,7 @@ pub struct Stl {
 }
 
 fn next_odd(x: usize) -> usize {
-    if x.is_multiple_of(2) {
+    if x % 2 == 0 {
         x + 1
     } else {
         x
@@ -161,8 +162,9 @@ impl Stl {
         self
     }
 
-    /// Decomposes the values. `None` for a period under 2, fewer than two
-    /// full cycles or values that are not finite.
+    /// Decomposes the values. `None` for a period under 2, a series that is
+    /// not longer than two full cycles (as in R's `stl`) or values that are
+    /// not finite.
     pub fn decompose(&self, y: &[f64]) -> Option<Decomposition> {
         let (n, np) = (y.len(), self.period);
         if np < 2 || n <= 2 * np || y.iter().any(|v| !v.is_finite()) {
@@ -336,7 +338,11 @@ fn robustness_weights(y: &[f64], fit: &[f64]) -> Vec<f64> {
     let mut sorted = r.clone();
     sorted.sort_by(f64::total_cmp);
     let middle = n / 2;
-    let cmad = 3.0 * (sorted[middle] + sorted[n - middle - 1]);
+    // on data the fit reproduces exactly the residuals are rounding noise,
+    // and telling them apart by size would discard points at random: the
+    // yardstick never goes below what rounding leaves
+    let size = y.iter().map(|v| v.abs()).sum::<f64>() / n as f64;
+    let cmad = (3.0 * (sorted[middle] + sorted[n - middle - 1])).max(1e-10 * size);
     let (c9, c1) = (0.999 * cmad, 0.001 * cmad);
     r.iter()
         .map(|v| {
@@ -537,8 +543,8 @@ impl Mstl {
         self
     }
 
-    /// Decomposes the values. `None` when no period fits twice in the series
-    /// or the values are not finite.
+    /// Decomposes the values. `None` when the series is not longer than two
+    /// cycles of any of the periods, or the values are not finite.
     pub fn decompose(&self, y: &[f64]) -> Option<Decomposition> {
         let n = y.len();
         if y.iter().any(|v| !v.is_finite()) {

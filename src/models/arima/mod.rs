@@ -119,10 +119,10 @@ impl Arima {
     /// autocorrelations at `ar` and the moving average ones at `ma`.
     fn start(&self, ar: f64, ma: f64) -> Vec<f64> {
         let mut u = Vec::new();
-        u.extend(std::iter::repeat_n(ar.atanh(), self.p));
-        u.extend(std::iter::repeat_n(ma.atanh(), self.q));
-        u.extend(std::iter::repeat_n(ar.atanh(), self.sp));
-        u.extend(std::iter::repeat_n(ma.atanh(), self.sq));
+        u.extend(std::iter::repeat(ar.atanh()).take(self.p));
+        u.extend(std::iter::repeat(ma.atanh()).take(self.q));
+        u.extend(std::iter::repeat(ar.atanh()).take(self.sp));
+        u.extend(std::iter::repeat(ma.atanh()).take(self.sq));
         u
     }
 
@@ -259,10 +259,12 @@ impl Arima {
                 errors: f.errors,
             })
         };
+        // a fit is exact when what is left is rounding noise next to the data
+        let exact = 1e-20 * w.iter().map(|x| x * x).sum::<f64>() / n as f64;
         // −2 log likelihood with the variance concentrated out, up to a constant
         let objective = |u: &[f64]| -> f64 {
             match evaluate(u) {
-                Some(e) if e.sigma2 > 0.0 => n as f64 * e.sigma2.ln() + e.log_det,
+                Some(e) if e.sigma2 > exact => n as f64 * e.sigma2.ln() + e.log_det,
                 // a perfect fit: nothing left to explain
                 Some(_) => -1e300,
                 None => f64::INFINITY,
@@ -289,10 +291,13 @@ impl Arima {
         let parts = build(&u);
         let nf = n as f64;
         let k = (coefficients + width + 1) as f64;
-        let log_likelihood = if e.sigma2 > 0.0 {
+        // for an exact fit the likelihood has no bound: a very large number
+        // stands for it, as in exponential smoothing, so the criteria stay
+        // finite and comparable
+        let log_likelihood = if e.sigma2 > exact {
             -0.5 * (nf * (2.0 * std::f64::consts::PI * e.sigma2).ln() + e.log_det + nf)
         } else {
-            f64::INFINITY
+            0.5e300
         };
         let aic = -2.0 * log_likelihood + 2.0 * k;
         let aicc = if nf - k - 1.0 > 0.0 {

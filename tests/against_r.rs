@@ -1032,7 +1032,7 @@ fn tbats_likelihood_is_never_above_r() {
 #[test]
 fn automatic_tbats_is_no_worse_than_r() {
     use foresight::models::Tbats;
-    for (name, aic) in [("icms", 4458.778729), ("fpe", 4481.456179)] {
+    for (name, aic) in [("air", 1397.0), ("icms", 4458.778729), ("fpe", 4481.456179)] {
         let values = ets_series(name);
         let fit = Tbats::new(&[]).select(Series::new(&values, 12)).unwrap();
         assert!(fit.aic() < aic, "{name}: {} × {aic}", fit.aic());

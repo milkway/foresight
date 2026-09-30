@@ -14,6 +14,9 @@
 //!    k periods of each origin, because adding up the limits of k intervals
 //!    overstates the uncertainty of a total.
 
+use std::cell::Cell;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use crate::accuracy::{mase_scale, quantile};
 use crate::model::{Model, Params};
 use crate::series::Series;
@@ -63,13 +66,14 @@ pub struct Backtest {
     /// Training observations at the first origin. Shorter series get fewer
     /// origins.
     pub min_train: usize,
-    /// Train on the last `window` observations only; `None` uses everything
-    /// before the origin.
+    /// Train on the last `window` observations only, at every origin and for
+    /// the final forecast; `None` uses everything before the origin.
     pub window: Option<usize>,
     /// Also evaluate the simple average of the best `combine` models (fewer
     /// than 2 disables it).
     pub combine: usize,
-    /// Coverage of the intervals, e.g. 0.8 for the 10%–90% quantiles.
+    /// Coverage of the intervals, e.g. 0.8 for the 10%–90% quantiles; each
+    /// one above 0 and below 1.
     pub levels: Vec<f64>,
     /// Measure that ranks the candidates.
     pub metric: Metric,
@@ -78,34 +82,75 @@ pub struct Backtest {
     pub parallel: bool,
 }
 
-/// `f(0), …, f(n − 1)`, computed on all cores when `parallel`.
+/// Most threads a computation may use; 0 stands for every core.
+static MAX_THREADS: AtomicUsize = AtomicUsize::new(0);
+
+thread_local! {
+    /// True on a thread that is already working for a parallel computation:
+    /// what it calls runs on that thread alone, so threads never multiply.
+    static WORKING: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Limits the threads used by backtests and ensembles, in the whole process.
+/// Zero, the default, stands for every core the system reports.
+///
+/// The results do not depend on the number of threads.
+pub fn set_max_threads(threads: usize) {
+    MAX_THREADS.store(threads, Ordering::Relaxed);
+}
+
+/// The most threads a backtest or an ensemble will use: what was set with
+/// [`set_max_threads`], or the number of cores.
+pub fn max_threads() -> usize {
+    match MAX_THREADS.load(Ordering::Relaxed) {
+        0 => std::thread::available_parallelism().map_or(1, |t| t.get()),
+        limit => limit,
+    }
+}
+
+/// `f(0), …, f(n − 1)`, computed on several threads when `parallel`: at most
+/// [`max_threads`], and only one when called from a thread that is itself
+/// part of such a computation (an ensemble inside a backtest).
 pub(crate) fn map_indices<T: Send>(
     n: usize,
     parallel: bool,
     f: impl Fn(usize) -> T + Sync,
 ) -> Vec<T> {
-    let threads = if parallel && cfg!(not(target_family = "wasm")) {
-        std::thread::available_parallelism().map_or(1, |t| t.get().min(n))
+    let threads = if parallel && cfg!(not(target_family = "wasm")) && !WORKING.with(Cell::get) {
+        max_threads().min(n)
     } else {
         1
     };
     if threads <= 1 {
         return (0..n).map(f).collect();
     }
-    let next = std::sync::atomic::AtomicUsize::new(0);
+    let next = AtomicUsize::new(0);
     let done: std::sync::Mutex<Vec<Option<T>>> =
         std::sync::Mutex::new((0..n).map(|_| None).collect());
-    std::thread::scope(|scope| {
-        for _ in 0..threads {
-            scope.spawn(|| loop {
-                let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                if i >= n {
-                    break;
-                }
-                let value = f(i);
-                done.lock().expect("no thread panics holding the lock")[i] = Some(value);
-            });
+    let work = || {
+        WORKING.with(|w| w.set(true));
+        loop {
+            let i = next.fetch_add(1, Ordering::Relaxed);
+            if i >= n {
+                break;
+            }
+            let value = f(i);
+            done.lock().expect("no thread panics holding the lock")[i] = Some(value);
         }
+    };
+    std::thread::scope(|scope| {
+        // the calling thread works too; if the system refuses a thread, the
+        // ones already running (at least this one) do the whole job
+        for _ in 1..threads {
+            if std::thread::Builder::new()
+                .spawn_scoped(scope, work)
+                .is_err()
+            {
+                break;
+            }
+        }
+        work();
+        WORKING.with(|w| w.set(false));
     });
     done.into_inner()
         .expect("no thread panics holding the lock")
@@ -183,10 +228,14 @@ impl Point {
             mean,
             intervals: bands
                 .iter()
-                .map(|b| Interval {
-                    level: b.level,
-                    lower: mean * (1.0 + b.lower),
-                    upper: mean * (1.0 + b.upper),
+                .map(|b| {
+                    // a negative forecast turns the bounds around
+                    let (a, z) = (mean * (1.0 + b.lower), mean * (1.0 + b.upper));
+                    Interval {
+                        level: b.level,
+                        lower: a.min(z),
+                        upper: a.max(z),
+                    }
                 })
                 .collect(),
         }
@@ -395,15 +444,24 @@ impl Backtest {
     /// Evaluates the candidates on `y`, chooses one and forecasts `horizon`
     /// periods with every candidate that went through the whole backtest.
     ///
+    /// A candidate takes part only if it gives `horizon` finite forecasts at
+    /// every origin and from the whole series; the others are left out of the
+    /// report.
+    ///
     /// `None` when the series is too short for at least one pair at the
-    /// longest horizon, or when no candidate could be fitted at every origin.
+    /// longest horizon, when a level is not between 0 and 1, or when no
+    /// candidate is left.
     pub fn run(&self, y: Series<'_>, candidates: &[Candidate]) -> Option<Report> {
         let n = y.len();
         let origins = self.origins.min(n.saturating_sub(self.min_train));
         if self.horizon == 0 || origins < self.horizon {
             return None;
         }
+        if self.levels.iter().any(|l| !(*l > 0.0 && *l < 1.0)) {
+            return None;
+        }
         let first = n - origins;
+        let usable = |p: &Vec<f64>| p.len() == self.horizon && p.iter().all(|v| v.is_finite());
 
         // 1. forecasts of every model at every origin
         struct Entry<'c> {
@@ -411,20 +469,32 @@ impl Backtest {
             trajectories: Vec<Vec<f64>>,
         }
         let mut entries: Vec<Entry> = Vec::new();
+        // forecast from the whole series (the last `window` observations of
+        // it), and the parameters of that fit
+        let mut finals: Vec<(Vec<f64>, Params)> = Vec::new();
         for c in candidates {
             let trajectories: Option<Vec<Vec<f64>>> = map_indices(origins, self.parallel, |k| {
                 c.model
                     .forecast(self.train(y, first + k), self.horizon)
-                    .filter(|p| p.len() == self.horizon)
+                    .filter(usable)
             })
             .into_iter()
             .collect();
-            if let Some(trajectories) = trajectories {
-                entries.push(Entry {
-                    components: vec![c],
-                    trajectories,
-                });
+            let Some(trajectories) = trajectories else {
+                continue;
+            };
+            let Some(fit) = c.model.fit(self.train(y, n)) else {
+                continue;
+            };
+            let forecast = fit.forecast(self.horizon);
+            if !usable(&forecast) {
+                continue;
             }
+            finals.push((forecast, fit.params()));
+            entries.push(Entry {
+                components: vec![c],
+                trajectories,
+            });
         }
         if entries.is_empty() {
             return None;
@@ -467,11 +537,6 @@ impl Backtest {
         let chosen = (0..entries.len()).min_by(|&a, &b| scores[a].total_cmp(&scores[b]))?;
 
         // 4. forecast from the whole series, with each candidate's own bands
-        let mut finals: Vec<(Vec<f64>, Params)> = Vec::with_capacity(singles);
-        for e in &entries[..singles] {
-            let fit = e.components[0].model.fit(y)?;
-            finals.push((fit.forecast(self.horizon), fit.params()));
-        }
         let position = |c: &Candidate| {
             entries[..singles]
                 .iter()
@@ -693,6 +758,28 @@ mod tests {
         assert_eq!(together, in_turn);
         assert_eq!(map_indices(5, true, |i| i * i), vec![0, 1, 4, 9, 16]);
         assert_eq!(map_indices(0, true, |i| i), Vec::<usize>::new());
+    }
+
+    #[test]
+    fn work_inside_a_parallel_computation_stays_on_its_thread() {
+        let ids = map_indices(4, true, |_| {
+            let outer = std::thread::current().id();
+            let inner = map_indices(4, true, |_| std::thread::current().id());
+            inner.into_iter().all(|id| id == outer)
+        });
+        assert!(ids.into_iter().all(|same| same));
+        // and the caller is free to go parallel again afterwards
+        assert!(!WORKING.with(Cell::get));
+    }
+
+    #[test]
+    fn the_limit_of_threads_is_kept() {
+        assert!(max_threads() >= 1);
+        set_max_threads(1);
+        let here = std::thread::current().id();
+        let ids = map_indices(8, true, |_| std::thread::current().id());
+        set_max_threads(0);
+        assert!(ids.into_iter().all(|id| id == here));
     }
 
     #[test]

@@ -393,7 +393,9 @@ fn attempt(shape: &Shape, y: &[f64], start_lambda: f64, effort: Effort) -> Optio
         if !squares.is_finite() || x.iter().any(|v| !v.is_finite()) {
             return None;
         }
-        let fit = if squares > 0.0 {
+        // an exact fit: what is left is rounding noise next to the data
+        let size: f64 = z.iter().map(|v| v * v).sum();
+        let fit = if squares > 1e-20 * size {
             n as f64 * squares.ln()
         } else {
             -1e300
@@ -560,8 +562,8 @@ impl Tbats {
         let trends: Vec<(bool, bool)> = [(false, false), (true, false), (true, true)]
             .into_iter()
             .filter(|(trend, damped)| {
-                self.trend.is_none_or(|t| t == *trend)
-                    && (!trend || self.damped.is_none_or(|d| d == *damped))
+                self.trend.map_or(true, |t| t == *trend)
+                    && (!trend || self.damped.map_or(true, |d| d == *damped))
             })
             .collect();
         let with_arma = |plain: &Attempt| -> Option<Attempt> {
@@ -593,7 +595,7 @@ impl Tbats {
                 (shape.box_cox, shape.trend, shape.damped) = (box_cox, trend, damped);
                 if let Some(plain) = attempt(&shape, v, lambda, Effort::THOROUGH) {
                     candidates.extend(with_arma(&plain));
-                    if self.orders.is_none_or(|(p, q)| p + q == 0) {
+                    if self.orders.map_or(true, |(p, q)| p + q == 0) {
                         candidates.push(plain);
                     }
                 }

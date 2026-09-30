@@ -45,10 +45,15 @@ impl Regressors {
     /// Sines and cosines of the first `order` harmonics of a cycle of the
     /// given period, which need not be a whole number, for `rows` positions:
     /// a smooth seasonal pattern with few coefficients. The sine that is zero
-    /// everywhere (the harmonic at half a whole period) is left out.
+    /// everywhere (the harmonic at half a whole period) is left out, and so
+    /// are the harmonics beyond half the period, which would repeat the
+    /// earlier ones.
     pub fn fourier(period: f64, order: usize, rows: usize) -> Self {
         let mut out = Regressors::new();
         for k in 1..=order {
+            if 2.0 * k as f64 > period + 1e-9 {
+                break;
+            }
             let angle = |t: usize| 2.0 * PI * k as f64 * t as f64 / period;
             if (2.0 * k as f64 - period).abs() > 1e-9 {
                 out = out.with(

@@ -152,9 +152,11 @@ impl Prophet {
         self
     }
 
-    /// Harmonics actually used for a series of period `m`.
-    fn harmonics(&self, m: usize) -> usize {
-        if m < 2 {
+    /// Harmonics actually used for `n` observations of a series of period
+    /// `m`: none before two full cycles, as a pattern seen once cannot be
+    /// told from the trend.
+    fn harmonics(&self, m: usize, n: usize) -> usize {
+        if m < 2 || n < 2 * m {
             return 0;
         }
         self.fourier_order.unwrap_or(10).min(m / 2)
@@ -190,7 +192,7 @@ impl Prophet {
         let layout = Layout {
             span,
             changepoints: at.iter().map(|i| *i as f64 / span).collect(),
-            harmonics: self.harmonics(m),
+            harmonics: self.harmonics(m, n),
             period: m,
             events: self.events.clone(),
         };
@@ -360,7 +362,7 @@ impl Penalised<'_> {
                 let fitted: f64 = (0..p).map(|i| self.gram[j][i] * theta[i]).sum();
                 let pull = weight * (self.moment[j] - fitted);
                 let excess = pull.abs() - self.lasso[j] * (1.0 + 1e-9) - 1e-12;
-                if excess > 0.0 && worst.is_none_or(|(_, e, _)| excess > e) {
+                if excess > 0.0 && worst.map_or(true, |(_, e, _)| excess > e) {
                     worst = Some((j, excess, pull.signum()));
                 }
             }
@@ -747,7 +749,7 @@ mod tests {
         let layout = |m: usize, order: usize| Layout {
             span: 1.0,
             changepoints: vec![],
-            harmonics: Prophet::new().fourier_order(order).harmonics(m),
+            harmonics: Prophet::new().fourier_order(order).harmonics(m, 2 * m),
             period: m,
             events: vec![],
         };

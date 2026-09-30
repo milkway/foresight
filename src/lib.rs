@@ -53,7 +53,8 @@ mod testing;
 pub mod transform;
 
 pub use backtest::{
-    Backtest, Band, Candidate, CandidateReport, HorizonStats, Interval, Metric, Point, Report,
+    max_threads, set_max_threads, Backtest, Band, Candidate, CandidateReport, HorizonStats,
+    Interval, Metric, Point, Report,
 };
 pub use model::{Fitted, Model, Params};
 pub use regressors::Regressors;

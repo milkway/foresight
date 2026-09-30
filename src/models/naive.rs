@@ -178,7 +178,7 @@ impl Model for SeasonalNaive {
             }
             let last: f64 = v[n - m..].iter().sum();
             let before: f64 = v[n - 2 * m..n - m].iter().sum();
-            if before <= 0.0 {
+            if before <= 0.0 || last <= 0.0 {
                 return None;
             }
             Some(last / before)

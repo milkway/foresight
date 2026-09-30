@@ -253,7 +253,7 @@ impl Ets {
                 let mut sum = vec![0.0; m];
                 let mut count = vec![0usize; m];
                 for t in half..used.len().saturating_sub(half) {
-                    let centre = if m.is_multiple_of(2) {
+                    let centre = if m % 2 == 0 {
                         let inner: f64 = used[t + 1 - half..t + half].iter().sum();
                         (0.5 * used[t - half] + inner + 0.5 * used[t + half]) / m as f64
                     } else {

@@ -125,7 +125,7 @@ impl Model for HoltWinters {
                     for &phi in &PHI {
                         scratch.clone_from(&start);
                         if let Some(sse) = filter(v, m, &mut scratch, a, b, g, phi) {
-                            if best.is_none_or(|(s, _)| sse < s) {
+                            if best.map_or(true, |(s, _)| sse < s) {
                                 best = Some((sse, [a, b, g, phi]));
                             }
                         }
