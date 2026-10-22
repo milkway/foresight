@@ -19,4 +19,5 @@ authors:
 repository-code: "https://github.com/milkway/foresight"
 url: "https://milkway.github.io/foresight/"
 license: MIT
+doi: 10.5281/zenodo.23579950
 version: 0.7.3
