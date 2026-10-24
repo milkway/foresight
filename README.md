@@ -4,14 +4,15 @@
 [![crates.io](https://img.shields.io/crates/v/foresight.svg)](https://crates.io/crates/foresight)
 [![docs.rs](https://img.shields.io/docsrs/foresight)](https://docs.rs/foresight)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE-MIT)
-[![Dependencies: none](https://img.shields.io/badge/dependencies-none-brightgreen.svg)](Cargo.toml)
+[![Dependencies: none by default](https://img.shields.io/badge/dependencies-none%20by%20default-brightgreen.svg)](Cargo.toml)
 [![Website](https://img.shields.io/badge/website-milkway.github.io%2Fforesight-8A2BE2.svg)](https://milkway.github.io/foresight/)
 
 Time series forecasting in Rust that picks its model by what would have worked.
 
 `foresight` fits several models to a series, replays the past to see how each
 would have done, chooses by out-of-sample error and reports intervals taken
-from the errors actually observed. It has no dependencies and every result is
+from the errors actually observed. It has no dependencies by default — one
+opt-in feature adds a single dependency-free MIT crate — and every result is
 deterministic.
 
 **Website:** <https://milkway.github.io/foresight/> ·
@@ -25,6 +26,17 @@ cargo add foresight
 ```
 
 Rust 1.81 or later. Changes between versions: [CHANGELOG.md](CHANGELOG.md).
+
+One optional feature, `tsorder`, connects `AutoArima` to the order-selection
+estimators of [tsorder](https://github.com/castlaboratory/tsorder) (MIT,
+dependency-free, pinned): seed the stepwise search with its Hannan–Rissanen
+proposal, choose the differences by its sequential KPSS test, or cap the
+search at its estimated McMillan degree — each behind its own builder method,
+all off by default.
+
+```bash
+cargo add foresight --features tsorder
+```
 
 ## Use
 

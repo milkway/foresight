@@ -4,9 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>foresight — forecasting that picks its model by what would have worked</title>
-<meta name="description" content="A Rust crate for time series forecasting: rolling-origin backtest, model choice by out-of-sample error and empirical prediction intervals. No dependencies, deterministic, checked against R." />
+<meta name="description" content="A Rust crate for time series forecasting: rolling-origin backtest, model choice by out-of-sample error and empirical prediction intervals. No dependencies by default, deterministic, checked against R." />
 <meta property="og:title" content="foresight — time series forecasting in Rust" />
-<meta property="og:description" content="Rolling-origin backtest, choice by out-of-sample error, empirical intervals for each horizon and for totals. ARIMA, Prophet, Theta, Holt-Winters and more, with no dependencies." />
+<meta property="og:description" content="Rolling-origin backtest, choice by out-of-sample error, empirical intervals for each horizon and for totals. ARIMA, Prophet, Theta, Holt-Winters and more, with no dependencies by default." />
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://milkway.github.io/foresight/" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%AD%3C/text%3E%3C/svg%3E" />
@@ -247,7 +247,7 @@
           <a href="https://github.com/milkway/foresight/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/milkway/foresight/actions/workflows/ci.yml/badge.svg"></a>
           <a href="https://crates.io/crates/foresight"><img alt="crates.io" src="https://img.shields.io/crates/v/foresight.svg"></a>
           <a href="https://github.com/milkway/foresight/blob/main/LICENSE-MIT"><img alt="License MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
-          <img alt="No dependencies" src="https://img.shields.io/badge/dependencies-none-brightgreen.svg">
+          <img alt="No dependencies by default" src="https://img.shields.io/badge/dependencies-none%20by%20default-brightgreen.svg">
           <img alt="Platforms" src="https://img.shields.io/badge/platforms-linux%20%7C%20macos%20%7C%20windows%20%7C%20wasm-informational.svg">
         </div>
         <div class="cta">
@@ -283,7 +283,7 @@ seasonal_naive         MAPE 11.45%</code></pre>
         <div class="card"><div class="ic">🎯</div><h3>Choice by out-of-sample error</h3><p>The winner is whatever forecast best, the simple average of the best models included. No information criterion decides what you ship.</p></div>
         <div class="card"><div class="ic">📏</div><h3>Empirical intervals</h3><p>Intervals are quantiles of the errors seen in the backtest, horizon by horizon. No normality is assumed and none is needed.</p></div>
         <div class="card"><div class="ic">∑</div><h3>Intervals for totals</h3><p>The total of the next k periods gets its own interval, measured on totals. Adding up monthly limits would overstate the uncertainty of a year.</p></div>
-        <div class="card"><div class="ic">🦀</div><h3>No dependencies</h3><p>Pure Rust on the standard library. Small builds, nothing to audit but the crate itself, and it compiles to WebAssembly.</p></div>
+        <div class="card"><div class="ic">🦀</div><h3>No dependencies by default</h3><p>Pure Rust on the standard library. Small builds, little to audit, and it compiles to WebAssembly; one opt-in feature adds a single dependency-free crate (tsorder).</p></div>
         <div class="card"><div class="ic">🧾</div><h3>Deterministic</h3><p>The same series gives the same numbers, on one core or sixteen. Fitted parameters are exposed by name, ready for an audit trail.</p></div>
       </div>
     </div>
@@ -412,7 +412,7 @@ println!(<span class="c-str">"{:?}{:?} AICc {}"</span>,
       <div class="grid f3" style="margin-top:18px">
         <div class="card"><div class="ic">✅</div><h3>CI on every platform</h3><p>fmt · clippy <code>-D warnings</code> · tests and docs on Linux, macOS and Windows, plus a WebAssembly build.</p></div>
         <div class="card"><div class="ic">📄</div><h3>From the papers</h3><p>Box &amp; Jenkins, Brockwell &amp; Davis, Hyndman &amp; Khandakar, Taylor &amp; Letham, Assimakopoulos &amp; Nikolopoulos, Guerrero, Kwiatkowski et al. R supplies reference numbers only.</p></div>
-        <div class="card"><div class="ic">⚖️</div><h3>MIT, nothing attached</h3><p>With no dependencies there is no license to reconcile and no supply chain to watch.</p></div>
+        <div class="card"><div class="ic">⚖️</div><h3>MIT, nothing attached</h3><p>No license to reconcile and next to no supply chain to watch: the one optional dependency, tsorder, is MIT and dependency-free.</p></div>
       </div>
     </div>
   </section>

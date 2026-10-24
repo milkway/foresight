@@ -4,7 +4,8 @@
 //! each would have done (rolling-origin backtest), chooses by out-of-sample
 //! error and reports intervals taken from the errors actually observed —
 //! including intervals for the total of the next k periods. It has no
-//! dependencies and every result is deterministic.
+//! dependencies by default (one opt-in feature, `tsorder`, adds a single
+//! dependency-free MIT crate) and every result is deterministic.
 //!
 //! ```
 //! use foresight::{models, Backtest, Series};
