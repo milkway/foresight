@@ -33,6 +33,25 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
+  # The optional tsorder feature, behind the same gates as the default build.
+  tsorder:
+    name: test (tsorder feature)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy
+        run: cargo clippy --all-targets --features tsorder -- -D warnings
+      - name: Test
+        run: cargo test --features tsorder
+      - name: Docs
+        run: cargo doc --no-deps --features tsorder
+        env:
+          RUSTDOCFLAGS: -D warnings
+
   # The oldest Rust the crate promises to build with (rust-version).
   msrv:
     name: test (rust 1.81)
@@ -41,6 +60,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.81.0
       - run: cargo test
+      - run: cargo test --features tsorder
 
   # The crate promises to build for the browser: no threads, no system calls.
   wasm:

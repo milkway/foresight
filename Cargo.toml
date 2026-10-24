@@ -8,7 +8,7 @@ authors = [
 ]
 edition = "2021"
 rust-version = "1.81"
-description = "Time series forecasting with out-of-sample model selection, empirical prediction intervals and no dependencies"
+description = "Time series forecasting with out-of-sample model selection, empirical prediction intervals and no dependencies by default"
 license = "MIT"
 repository = "https://github.com/milkway/foresight"
 homepage = "https://milkway.github.io/foresight/"
@@ -25,8 +25,14 @@ tsorder = ["dep:tsorder-core"]
 [dependencies]
 # Optional order-selection engine (castlab's tsorder): proposes (p, q) by
 # Hannan-Rissanen at regression cost, seeding the stepwise search, and can
-# choose the differences and cap the search complexity.
-tsorder-core = { version = "0.1", optional = true }
+# choose the differences and cap the search complexity. Pinned exactly:
+# Cargo.lock is not tracked, and a floating patch release could silently
+# change which model AutoArima selects (and what the Radar stores).
+tsorder-core = { version = "=0.1.0", optional = true }
+
+# docs.rs shows the feature-gated API too.
+[package.metadata.docs.rs]
+all-features = true
 
 # The models are numerical: without optimisation the tests take minutes.
 [profile.dev]

@@ -6,7 +6,8 @@ Previsão de séries temporais em Rust que escolhe o modelo pelo que teria
 funcionado. O `foresight` ajusta vários modelos à série, refaz o passado para
 ver como cada um teria se saído (backtest por origem móvel), escolhe pelo erro
 fora da amostra e informa intervalos tirados dos erros de fato observados. Não
-tem dependências e todo resultado é determinístico.
+tem dependências por padrão — uma feature opcional acrescenta um único crate
+MIT sem dependências — e todo resultado é determinístico.
 
 **Site:** <https://milkway.github.io/foresight/>
 

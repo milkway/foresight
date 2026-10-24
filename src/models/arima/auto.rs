@@ -47,16 +47,14 @@ pub struct AutoArima {
     /// External variables of a regression with ARIMA errors.
     pub regressors: Option<Regressors>,
     /// Seed the stepwise search with tsorder's Hannan-Rissanen proposal
-    /// (requires the `tsorder` feature; [`AutoArima::tsorder_seed`]).
-    #[cfg(feature = "tsorder")]
+    /// (`tsorder_seed`). Always present so the struct has one shape in every
+    /// build; read only with the `tsorder` feature, inert without it.
     pub seed_from_tsorder: bool,
     /// Choose the ordinary differences with tsorder's sequential KPSS test
-    /// (requires the `tsorder` feature; [`AutoArima::tsorder_differences`]).
-    #[cfg(feature = "tsorder")]
+    /// (`tsorder_differences`). Read only with the `tsorder` feature.
     pub d_from_tsorder: bool,
     /// Cap p and q at tsorder's estimated McMillan degree plus one
-    /// (requires the `tsorder` feature; [`AutoArima::tsorder_complexity_cap`]).
-    #[cfg(feature = "tsorder")]
+    /// (`tsorder_complexity_cap`). Read only with the `tsorder` feature.
     pub cap_from_tsorder: bool,
 }
 
@@ -74,11 +72,8 @@ impl Default for AutoArima {
             criterion: Criterion::Aicc,
             max_models: 94,
             regressors: None,
-            #[cfg(feature = "tsorder")]
             seed_from_tsorder: false,
-            #[cfg(feature = "tsorder")]
             d_from_tsorder: false,
-            #[cfg(feature = "tsorder")]
             cap_from_tsorder: false,
         }
     }
@@ -229,7 +224,9 @@ impl AutoArima {
                         ..Default::default()
                     };
                     if let Ok(r) = tsorder_core::integration_order(&w, config) {
-                        return r.d;
+                        // the config already carries max_d; the clamp keeps
+                        // the caller's bound ours to enforce
+                        return r.d.min(self.max_d);
                     }
                 }
                 ndiffs(&w, self.max_d)
@@ -237,32 +234,41 @@ impl AutoArima {
         };
         let with_constant = d + sd <= 1;
 
+        // The fully differenced series that tsorder's estimators work on,
+        // computed once for the cap and the seed.
         #[cfg(feature = "tsorder")]
-        let complexity_cap: Option<usize> = if self.cap_from_tsorder {
-            let mut w = v.to_vec();
-            for _ in 0..sd {
-                w = difference(&w, m);
-            }
-            for _ in 0..d {
-                w = difference(&w, 1);
-            }
-            tsorder_core::svc_order(&w, tsorder_core::SvcConfig::default())
-                .ok()
-                .map(|r| r.order + 1)
-        } else {
-            None
+        let differenced: Option<Vec<f64>> =
+            (self.cap_from_tsorder || self.seed_from_tsorder).then(|| {
+                let mut w = v.to_vec();
+                for _ in 0..sd {
+                    w = difference(&w, m);
+                }
+                for _ in 0..d {
+                    w = difference(&w, 1);
+                }
+                w
+            });
+
+        // tsorder's complexity cap only tightens the bounds of the search:
+        // the degree of an ARMA(p, q) is max(p, q), so a cap on the degree
+        // is a cap on p and on q.
+        #[cfg(feature = "tsorder")]
+        let (max_p, max_q) = match differenced.as_deref().filter(|_| self.cap_from_tsorder) {
+            Some(w) => match tsorder_core::svc_order(w, tsorder_core::SvcConfig::default()) {
+                Ok(r) => (self.max_p.min(r.order + 1), self.max_q.min(r.order + 1)),
+                Err(_) => (self.max_p, self.max_q),
+            },
+            None => (self.max_p, self.max_q),
         };
+        #[cfg(not(feature = "tsorder"))]
+        let (max_p, max_q) = (self.max_p, self.max_q);
 
         let mut tried: Vec<Key> = Vec::new();
         let mut best: Option<(f64, Key, ArimaFit)> = None;
         let mut consider = |key: Key, best: &mut Option<(f64, Key, ArimaFit)>| -> bool {
             let (p, q, sp, sq, constant) = key;
-            #[cfg(feature = "tsorder")]
-            if complexity_cap.is_some_and(|cap| p.max(q) > cap) {
-                return false;
-            }
-            if p > self.max_p
-                || q > self.max_q
+            if p > max_p
+                || q > max_q
                 || sp > self.max_seasonal_p
                 || sq > self.max_seasonal_q
                 || (constant && !with_constant)
@@ -301,21 +307,16 @@ impl AutoArima {
             consider((p, q, sp, sq, with_constant), &mut best);
         }
         #[cfg(feature = "tsorder")]
-        if self.seed_from_tsorder {
-            let mut w = v.to_vec();
-            for _ in 0..sd {
-                w = difference(&w, m);
-            }
-            for _ in 0..d {
-                w = difference(&w, 1);
-            }
+        if let Some(w) = differenced.as_deref().filter(|_| self.seed_from_tsorder) {
             let config = tsorder_core::HrConfig {
-                max_p: self.max_p,
-                max_q: self.max_q,
+                max_p,
+                max_q,
                 ..Default::default()
             };
-            if let Ok(hr) = tsorder_core::hannan_rissanen(&w, config) {
-                consider((hr.p, hr.q, s, s, with_constant), &mut best);
+            if let Ok(hr) = tsorder_core::hannan_rissanen(w, config) {
+                if seasonal {
+                    consider((hr.p, hr.q, s, s, with_constant), &mut best);
+                }
                 consider((hr.p, hr.q, 0, 0, with_constant), &mut best);
             }
         }
@@ -396,9 +397,11 @@ mod tests {
     #[cfg(feature = "tsorder")]
     #[test]
     fn the_tsorder_seed_joins_the_search_without_changing_its_contract() {
-        // An AR(2) far from the fixed starting points: the seeded search must
-        // return a well-behaved fit and, on this clearly identified process,
-        // land on the same orders as the plain search.
+        // An AR(2) far from the fixed starting points. The contract: the
+        // seeded search returns a well-behaved fit within the usual bounds
+        // and does not touch the differences. The winning orders may
+        // lawfully differ from the plain search's — an extra candidate can
+        // change the trajectory — so they are not asserted.
         let e = noise(300);
         let mut y = vec![0.0f64; e.len()];
         for t in 2..e.len() {
@@ -406,9 +409,12 @@ mod tests {
         }
         let series = Series::non_seasonal(&y);
         let plain = AutoArima::new().select(series).unwrap();
-        let seeded = AutoArima::new().tsorder_seed().select(series).unwrap();
-        assert_eq!(seeded.order(), plain.order());
+        let auto = AutoArima::new().tsorder_seed();
+        let seeded = auto.select(series).unwrap();
         assert!(seeded.is_well_behaved(1.01));
+        let (p, d, q) = seeded.order();
+        assert_eq!(d, plain.order().1, "the seed must not touch d");
+        assert!(p <= auto.max_p && q <= auto.max_q);
     }
 
     #[cfg(feature = "tsorder")]

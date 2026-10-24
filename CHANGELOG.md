@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Optional `tsorder` feature: `AutoArima` can seed its stepwise search with
+  tsorder's Hannan-Rissanen proposal (`tsorder_seed`), choose the ordinary
+  differences by its sequential KPSS test (`tsorder_differences`) and cap
+  p and q at its estimated McMillan degree plus one
+  (`tsorder_complexity_cap`). All opt-in and off by default; without the
+  feature nothing changes. The single dependency, `tsorder-core` (MIT,
+  dependency-free), is pinned exactly so results stay reproducible.
+
 ## 0.7.3
 
 - `Backtest::parallel(false)` now also keeps ensembles among the candidates on
