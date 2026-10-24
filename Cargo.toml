@@ -18,7 +18,15 @@ keywords = ["forecasting", "time-series", "arima", "prophet", "backtest"]
 categories = ["science", "mathematics"]
 exclude = ["site/", ".github/", "scripts/", "tests/r/", "CLAUDE.md"]
 
+[features]
+# Seeds AutoArima's stepwise search with tsorder's Hannan-Rissanen proposal.
+tsorder = ["dep:tsorder-core"]
+
 [dependencies]
+# Optional order-selection engine (castlab's tsorder): proposes (p, q) by
+# Hannan-Rissanen at regression cost, seeding the stepwise search. Switch to
+# the crates.io version once tsorder-core is published there.
+tsorder-core = { git = "https://github.com/castlaboratory/tsorder", optional = true }
 
 # The models are numerical: without optimisation the tests take minutes.
 [profile.dev]
