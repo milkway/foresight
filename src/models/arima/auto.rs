@@ -50,6 +50,14 @@ pub struct AutoArima {
     /// (requires the `tsorder` feature; [`AutoArima::tsorder_seed`]).
     #[cfg(feature = "tsorder")]
     pub seed_from_tsorder: bool,
+    /// Choose the ordinary differences with tsorder's sequential KPSS test
+    /// (requires the `tsorder` feature; [`AutoArima::tsorder_differences`]).
+    #[cfg(feature = "tsorder")]
+    pub d_from_tsorder: bool,
+    /// Cap p and q at tsorder's estimated McMillan degree plus one
+    /// (requires the `tsorder` feature; [`AutoArima::tsorder_complexity_cap`]).
+    #[cfg(feature = "tsorder")]
+    pub cap_from_tsorder: bool,
 }
 
 impl Default for AutoArima {
@@ -68,6 +76,10 @@ impl Default for AutoArima {
             regressors: None,
             #[cfg(feature = "tsorder")]
             seed_from_tsorder: false,
+            #[cfg(feature = "tsorder")]
+            d_from_tsorder: false,
+            #[cfg(feature = "tsorder")]
+            cap_from_tsorder: false,
         }
     }
 }
@@ -108,6 +120,30 @@ impl AutoArima {
     #[cfg(feature = "tsorder")]
     pub fn tsorder_seed(mut self) -> Self {
         self.seed_from_tsorder = true;
+        self
+    }
+
+    /// Chooses the number of ordinary differences with tsorder's sequential
+    /// KPSS test instead of the built-in [`ndiffs`]. The two agree on clear
+    /// cases; tsorder's level vanishes with the sample size (`0.05·log 50 /
+    /// log n`), which makes the sequence of tests consistent where a fixed
+    /// 5% level keeps a 5% chance of over-differencing forever. An explicit
+    /// [`AutoArima::differences`] still wins.
+    #[cfg(feature = "tsorder")]
+    pub fn tsorder_differences(mut self) -> Self {
+        self.d_from_tsorder = true;
+        self
+    }
+
+    /// Caps `p` and `q` at tsorder's estimate of the McMillan degree plus
+    /// one. The degree of an ARMA(p, q) is `max(p, q)`, and its SVC-CCA
+    /// estimate (Bauer 2001) is immune to observation noise, so the cap
+    /// prunes the corners of the search space that the degree already rules
+    /// out; the `+1` absorbs estimation error. Seasonal terms are not
+    /// capped.
+    #[cfg(feature = "tsorder")]
+    pub fn tsorder_complexity_cap(mut self) -> Self {
+        self.cap_from_tsorder = true;
         self
     }
 
@@ -186,15 +222,45 @@ impl AutoArima {
                 for _ in 0..sd {
                     w = difference(&w, m);
                 }
+                #[cfg(feature = "tsorder")]
+                if self.d_from_tsorder {
+                    let config = tsorder_core::IntegrationConfig {
+                        max_d: self.max_d,
+                        ..Default::default()
+                    };
+                    if let Ok(r) = tsorder_core::integration_order(&w, config) {
+                        return r.d;
+                    }
+                }
                 ndiffs(&w, self.max_d)
             })
         };
         let with_constant = d + sd <= 1;
 
+        #[cfg(feature = "tsorder")]
+        let complexity_cap: Option<usize> = if self.cap_from_tsorder {
+            let mut w = v.to_vec();
+            for _ in 0..sd {
+                w = difference(&w, m);
+            }
+            for _ in 0..d {
+                w = difference(&w, 1);
+            }
+            tsorder_core::svc_order(&w, tsorder_core::SvcConfig::default())
+                .ok()
+                .map(|r| r.order + 1)
+        } else {
+            None
+        };
+
         let mut tried: Vec<Key> = Vec::new();
         let mut best: Option<(f64, Key, ArimaFit)> = None;
         let mut consider = |key: Key, best: &mut Option<(f64, Key, ArimaFit)>| -> bool {
             let (p, q, sp, sq, constant) = key;
+            #[cfg(feature = "tsorder")]
+            if complexity_cap.is_some_and(|cap| p.max(q) > cap) {
+                return false;
+            }
             if p > self.max_p
                 || q > self.max_q
                 || sp > self.max_seasonal_p
@@ -343,6 +409,42 @@ mod tests {
         let seeded = AutoArima::new().tsorder_seed().select(series).unwrap();
         assert_eq!(seeded.order(), plain.order());
         assert!(seeded.is_well_behaved(1.01));
+    }
+
+    #[cfg(feature = "tsorder")]
+    #[test]
+    fn tsorder_differences_and_cap_keep_the_contract() {
+        // Random walk: both difference rules must agree on d = 1, and the
+        // capped search must still return a well-behaved model within the cap.
+        let e = noise(300);
+        let mut level = 0.0;
+        let y: Vec<f64> = e
+            .iter()
+            .map(|x| {
+                level += x;
+                level
+            })
+            .collect();
+        let series = Series::non_seasonal(&y);
+        let plain = AutoArima::new().select(series).unwrap();
+        let td = AutoArima::new()
+            .tsorder_differences()
+            .select(series)
+            .unwrap();
+        assert_eq!(
+            td.order().1,
+            plain.order().1,
+            "d disagrees on a random walk"
+        );
+
+        let capped = AutoArima::new()
+            .tsorder_differences()
+            .tsorder_complexity_cap()
+            .select(series)
+            .unwrap();
+        assert!(capped.is_well_behaved(1.01));
+        let (p, _, q) = capped.order();
+        assert!(p.max(q) <= 3, "cap did not bite: ARIMA({p},_,{q})");
     }
 
     fn noise(n: usize) -> Vec<f64> {
