@@ -24,9 +24,9 @@ tsorder = ["dep:tsorder-core"]
 
 [dependencies]
 # Optional order-selection engine (castlab's tsorder): proposes (p, q) by
-# Hannan-Rissanen at regression cost, seeding the stepwise search. Switch to
-# the crates.io version once tsorder-core is published there.
-tsorder-core = { git = "https://github.com/castlaboratory/tsorder", optional = true }
+# Hannan-Rissanen at regression cost, seeding the stepwise search, and can
+# choose the differences and cap the search complexity.
+tsorder-core = { version = "0.1", optional = true }
 
 # The models are numerical: without optimisation the tests take minutes.
 [profile.dev]
