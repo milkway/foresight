@@ -46,6 +46,10 @@ pub struct AutoArima {
     pub max_models: usize,
     /// External variables of a regression with ARIMA errors.
     pub regressors: Option<Regressors>,
+    /// Seed the stepwise search with tsorder's Hannan-Rissanen proposal
+    /// (requires the `tsorder` feature; [`AutoArima::tsorder_seed`]).
+    #[cfg(feature = "tsorder")]
+    pub seed_from_tsorder: bool,
 }
 
 impl Default for AutoArima {
@@ -62,6 +66,8 @@ impl Default for AutoArima {
             criterion: Criterion::Aicc,
             max_models: 94,
             regressors: None,
+            #[cfg(feature = "tsorder")]
+            seed_from_tsorder: false,
         }
     }
 }
@@ -89,6 +95,19 @@ impl AutoArima {
     pub fn max_orders(mut self, p: usize, q: usize, sp: usize, sq: usize) -> Self {
         (self.max_p, self.max_q) = (p, q);
         (self.max_seasonal_p, self.max_seasonal_q) = (sp, sq);
+        self
+    }
+
+    /// Also starts the stepwise search from the (p, q) that tsorder's
+    /// Hannan-Rissanen selection proposes on the differenced series. The
+    /// proposal costs a few least-squares regressions, so it is nearly free
+    /// next to one exact-likelihood fit; when it lands near the optimum the
+    /// search converges in fewer fits, which multiplies across the origins
+    /// of a backtest. The search itself is unchanged: the seed is one more
+    /// candidate, judged by the same criterion.
+    #[cfg(feature = "tsorder")]
+    pub fn tsorder_seed(mut self) -> Self {
+        self.seed_from_tsorder = true;
         self
     }
 
@@ -215,6 +234,25 @@ impl AutoArima {
         for (p, q, sp, sq) in [(2, 2, s, s), (0, 0, 0, 0), (1, 0, s, 0), (0, 1, 0, s)] {
             consider((p, q, sp, sq, with_constant), &mut best);
         }
+        #[cfg(feature = "tsorder")]
+        if self.seed_from_tsorder {
+            let mut w = v.to_vec();
+            for _ in 0..sd {
+                w = difference(&w, m);
+            }
+            for _ in 0..d {
+                w = difference(&w, 1);
+            }
+            let config = tsorder_core::HrConfig {
+                max_p: self.max_p,
+                max_q: self.max_q,
+                ..Default::default()
+            };
+            if let Ok(hr) = tsorder_core::hannan_rissanen(&w, config) {
+                consider((hr.p, hr.q, s, s, with_constant), &mut best);
+                consider((hr.p, hr.q, 0, 0, with_constant), &mut best);
+            }
+        }
         if with_constant {
             consider((0, 0, 0, 0, false), &mut best);
         }
@@ -288,6 +326,24 @@ impl Model for AutoArima {
 mod tests {
     use super::*;
     use crate::testing::{noisy_seasonal_growth, seasonal_growth};
+
+    #[cfg(feature = "tsorder")]
+    #[test]
+    fn the_tsorder_seed_joins_the_search_without_changing_its_contract() {
+        // An AR(2) far from the fixed starting points: the seeded search must
+        // return a well-behaved fit and, on this clearly identified process,
+        // land on the same orders as the plain search.
+        let e = noise(300);
+        let mut y = vec![0.0f64; e.len()];
+        for t in 2..e.len() {
+            y[t] = 1.2 * y[t - 1] - 0.6 * y[t - 2] + e[t];
+        }
+        let series = Series::non_seasonal(&y);
+        let plain = AutoArima::new().select(series).unwrap();
+        let seeded = AutoArima::new().tsorder_seed().select(series).unwrap();
+        assert_eq!(seeded.order(), plain.order());
+        assert!(seeded.is_well_behaved(1.01));
+    }
 
     fn noise(n: usize) -> Vec<f64> {
         noisy_seasonal_growth(n, 1.0)
