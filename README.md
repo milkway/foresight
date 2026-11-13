@@ -120,6 +120,12 @@ println!("{:?} {:?}", fit.changepoints(), fit.effects());
 let next_year = fit.forecast(12);
 ```
 
+`Prophet` implements the model of Taylor & Letham (2018), "Forecasting at
+Scale", *The American Statistician* 72(1), 37–45. It is an independent
+implementation of the published model, not the official
+[Prophet](https://facebook.github.io/prophet/) software from Meta, and is not
+affiliated with or endorsed by it; see [what it covers](#checked-against-r).
+
 Automatic orders, inspected:
 
 ```rust
@@ -163,6 +169,12 @@ Methods are implemented from the published papers and compared with the R
 packages `forecast` 9.0.2 and `prophet` 1.1.7 on public data
 (`tests/against_r.rs`; the reference values come from the scripts in
 `tests/r/`).
+
+The R packages [`forecast`](https://CRAN.R-project.org/package=forecast)
+(Hyndman and others) and [`prophet`](https://CRAN.R-project.org/package=prophet)
+(Taylor & Letham) were used only as numerical references: they produced the
+values the tests compare against. foresight is an independent project, not
+affiliated with, maintained by or endorsed by the authors of either package.
 
 | Method | Agreement |
 |---|---|

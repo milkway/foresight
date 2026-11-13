@@ -21,3 +21,31 @@ url: "https://milkway.github.io/foresight/"
 license: MIT
 doi: 10.5281/zenodo.23579950
 version: 0.7.3
+references:
+  - type: article
+    title: "Forecasting at Scale"
+    authors:
+      - family-names: Taylor
+        given-names: "Sean J."
+      - family-names: Letham
+        given-names: Benjamin
+    journal: "The American Statistician"
+    year: 2018
+    volume: 72
+    issue: 1
+    start: 37
+    end: 45
+    doi: 10.1080/00031305.2017.1380080
+    notes: "The Prophet model that foresight's `Prophet` implements from the paper. foresight is not the official Prophet software."
+  - type: software
+    title: "forecast (R package)"
+    authors:
+      - name: "The forecast authors"
+    url: "https://CRAN.R-project.org/package=forecast"
+    notes: "Used only as a numerical reference in the tests."
+  - type: software
+    title: "prophet (R package)"
+    authors:
+      - name: "The prophet authors"
+    url: "https://CRAN.R-project.org/package=prophet"
+    notes: "Used only as a numerical reference in the tests."

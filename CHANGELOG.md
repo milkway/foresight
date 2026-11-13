@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Credit: the README says where `Prophet` is introduced that it implements
+  the model of Taylor & Letham (2018) and is not the official Prophet
+  software, and that the R packages `forecast` and `prophet` served only as
+  numerical references; `CITATION.cff` lists them under `references`.
 - Optional `tsorder` feature: `AutoArima` can seed its stepwise search with
   tsorder's Hannan-Rissanen proposal (`tsorder_seed`), choose the ordinary
   differences by its sequential KPSS test (`tsorder_differences`) and cap
